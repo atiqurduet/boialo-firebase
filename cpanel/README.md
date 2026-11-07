@@ -1,71 +1,70 @@
-# Boialo Media Library — cPanel Setup
+# Boialo — cPanel MySQL Database & Media Library Setup
 
-এই folder-এর ফাইল গুলো আপনার cPanel hosting-এ upload করুন। Frontend থেকে সব image/PDF এখানে upload হবে, Supabase database-এ শুধু URL সেভ থাকবে।
+এই folder-এর ফাইল গুলো দিয়ে আপনি পুরো প্রজেক্টটি **cPanel MySQL (phpMyAdmin)** এবং **cPanel File Storage**-এ কোনোরকম frontend কোড বা ফোল্ডার স্ট্রাকচার পরিবর্তন ছাড়াই চালাতে পারবেন।
 
-## Folder structure
+---
 
-cPanel `public_html/` ভিতরে এভাবে upload করুন:
+## ১. cPanel-এ MySQL Database তৈরি ও SQL Import
+
+1. **cPanel → MySQL® Databases** (অথবা MySQL Database Wizard)-এ যান:
+   - নতুন একটি Database তৈরি করুন (যেমন: `cpaneluser_boialo`)
+   - নতুন একটি Database User ও Password তৈরি করুন (যেমন: `cpaneluser_dbuser`)
+   - User-কে Database-এ **ALL PRIVILEGES** দিয়ে যুক্ত করুন।
+2. **cPanel → phpMyAdmin**-এ যান:
+   - বাম পাশ থেকে আপনার তৈরি করা ডাটাবেস (`cpaneluser_boialo`) সিলেক্ট করুন।
+   - উপরের **Import** ট্যাবে ক্লিক করুন।
+   - এই প্রজেক্টের `cpanel/mysql_schema.sql` ফাইলটি সিলেক্ট করে **Import / Go** বাটনে ক্লিক করুন।
+   - এতে সব টেবিল (`products`, `categories`, `orders`, `writers`, `publishers`, `site_settings`, `homepage_sections` ইত্যাদি) এবং প্রাথমিক ডেটা তৈরি হয়ে যাবে।
+
+---
+
+## ২. cPanel-এ PHP API ও Media Folder আপলোড
+
+cPanel `public_html/` ভিতরে নিচের স্ট্রাকচারে ফাইলগুলো রাখুন:
 
 ```
 public_html/
+├── index.html             <- (npm run build এর পর dist/ ফোল্ডারের সব ফাইল)
+├── .htaccess              <- SPA routing এর জন্য
 └── uploads/
     ├── .htaccess          <- cpanel/uploads/.htaccess থেকে
     └── api/
-        ├── config.php     <- config.php.example থেকে rename করে secret বসান
-        ├── upload.php
-        ├── delete.php
-        └── list.php       (optional)
+        ├── config.php     <- config.php.example থেকে rename করে MySQL ও Secret বসান
+        ├── _helpers.php
+        ├── db.php         <- MySQL REST Bridge (সব ডাটাবেস কুয়েরির জন্য)
+        ├── upload.php     <- ইমেজ ও PDF আপলোডের জন্য
+        └── delete.php     <- ফাইল ডিলিটের জন্য
 ```
 
-## Steps
+---
 
-### 1. Folder তৈরি
+## ৩. `config.php` কনফিগারেশন
 
-cPanel File Manager → `public_html` → New Folder → `uploads`, তারপর ভিতরে আরেকটা `api`।
+`public_html/uploads/api/config.php.example` ফাইলটি rename করে `config.php` করুন এবং আপনার MySQL তথ্য বসান:
 
-### 2. File upload
+```php
+define('DB_HOST', 'localhost');
+define('DB_NAME', 'cpaneluser_boialo');
+define('DB_USER', 'cpaneluser_dbuser');
+define('DB_PASS', 'YOUR_MYSQL_PASSWORD');
+define('DB_CHARSET', 'utf8mb4');
+```
 
-`cpanel/api/*.php` — এই ফাইল গুলো `public_html/uploads/api/` তে upload করুন।
-`cpanel/uploads/.htaccess` — এটা `public_html/uploads/.htaccess` তে upload করুন।
+---
 
-### 3. Secret setup
+## ৪. Frontend `.env` ও Build (cPanel Hosting-এর জন্য)
 
-- `config.php.example` কে rename করুন `config.php`
-- ভিতরে `MEDIA_HMAC_SECRET` এ একটা strong random string বসান (কমপক্ষে 32 character)
-- একই string আপনার Lovable/Supabase Edge Function secret-এ `MEDIA_HMAC_SECRET` নামে save করুন
+প্রজেক্টের রুটে `.env` ফাইলে আপনার ডোমেইনের `db.php` এবং `uploads` URL দিন:
 
-Random string generate করতে terminal-এ:
+```env
+VITE_MYSQL_API_URL=https://your-domain.com/uploads/api/db.php
+VITE_MEDIA_BASE_URL=https://your-domain.com/uploads
+```
+
+এরপর বিল্ড করুন:
 ```bash
-openssl rand -hex 32
+npm install
+npm run build
 ```
 
-### 4. Permission
-
-cPanel File Manager-এ:
-- `uploads/` folder → permission `755`
-- `uploads/api/*.php` → permission `644`
-- `config.php` → permission `600` (আপনার user শুধু পড়তে পারবে)
-
-### 5. Test
-
-Browser-এ যান: `https://your-domain.com/uploads/api/upload.php`
-
-দেখাবে: `{"error":"Method not allowed"}` — এর মানে script ঠিকঠাক install হয়েছে।
-
-### 6. Frontend config
-
-Admin panel-এ যান: **Settings → Site Settings → Media** → `media_base_url` = `https://your-domain.com/uploads` বসান।
-
-অথবা `site_settings` table-এ direct insert করুন:
-```sql
-INSERT INTO site_settings (setting_key, setting_value)
-VALUES ('media_base_url', '"https://your-domain.com/uploads"');
-```
-
-## Security notes
-
-- `.htaccess` uploads folder-এ PHP execution block করে — কেউ malicious file upload করে execute করতে পারবে না
-- সব upload HMAC token verified (5 minute expiry)
-- শুধু whitelist extension (jpg/png/webp/gif/pdf) allowed
-- Max size: image 5 MB, PDF 100 MB
-- Filename UUID-এ rename হয় — original filename metadata-তে থাকে
+`dist/` ফোল্ডারের সব ফাইল `public_html/`-এ আপলোড করুন।

@@ -1,12 +1,18 @@
 <?php
-// Copy this file to config.php and set your own strong secret.
-// The SAME secret must be set in Supabase Edge Function secrets as MEDIA_HMAC_SECRET.
-// Generate one: openssl rand -hex 32
+// Copy this file to config.php and set your own strong secret & cPanel MySQL credentials.
+// Generate a secret: openssl rand -hex 32
 
 define('MEDIA_HMAC_SECRET', 'REPLACE_WITH_STRONG_RANDOM_HEX_STRING_MIN_32_CHARS');
 
+// ─── cPanel MySQL Database Configuration ──────────────────────────────
+define('DB_HOST', 'localhost');
+define('DB_NAME', 'cpaneluser_boialo');
+define('DB_USER', 'cpaneluser_dbuser');
+define('DB_PASS', 'REPLACE_WITH_MYSQL_PASSWORD');
+define('DB_CHARSET', 'utf8mb4');
+
 // Allowed origins for CORS (comma-separated). Use "*" only for testing.
-define('MEDIA_ALLOWED_ORIGINS', 'https://boialo.com,https://boialo.lovable.app');
+define('MEDIA_ALLOWED_ORIGINS', 'https://boialo.com,http://localhost:3000');
 
 // Base public URL for uploaded files (no trailing slash).
 define('MEDIA_BASE_URL', 'https://boialo.com/uploads');
