@@ -1,0 +1,146 @@
+{
+  "entities": {
+    "CatalogRecord": {
+      "title": "CatalogRecord",
+      "description": "Public storefront and configuration record stored in catalog collections",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Unique record identifier"
+        },
+        "created_at": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "ISO creation timestamp"
+        }
+      },
+      "required": ["id"]
+    },
+    "OrderRecord": {
+      "title": "OrderRecord",
+      "description": "Customer order document",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "user_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "status": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "total_amount": {
+          "type": "number"
+        }
+      },
+      "required": ["id", "user_id", "status"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private user profile document isolated by owner UID",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "full_name": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "email": {
+          "type": "string",
+          "maxLength": 320
+        }
+      },
+      "required": ["id", "email"]
+    }
+  },
+  "firestore": {
+    "/site_settings/{docId}": {
+      "schema": "CatalogRecord",
+      "description": "Global site settings"
+    },
+    "/navigation_menus/{docId}": {
+      "schema": "CatalogRecord",
+      "description": "Navigation menus"
+    },
+    "/menu_items/{docId}": {
+      "schema": "CatalogRecord",
+      "description": "Navigation menu items"
+    },
+    "/footer_sections/{docId}": {
+      "schema": "CatalogRecord",
+      "description": "Footer sections"
+    },
+    "/footer_links/{docId}": {
+      "schema": "CatalogRecord",
+      "description": "Footer links"
+    },
+    "/banners/{docId}": {
+      "schema": "CatalogRecord",
+      "description": "Hero and promotional banners"
+    },
+    "/categories/{docId}": {
+      "schema": "CatalogRecord",
+      "description": "Book categories"
+    },
+    "/writers/{docId}": {
+      "schema": "CatalogRecord",
+      "description": "Book authors and writers"
+    },
+    "/publishers/{docId}": {
+      "schema": "CatalogRecord",
+      "description": "Book publishers"
+    },
+    "/products/{docId}": {
+      "schema": "CatalogRecord",
+      "description": "Books and store products"
+    },
+    "/homepage_sections/{docId}": {
+      "schema": "CatalogRecord",
+      "description": "Dynamic homepage sections"
+    },
+    "/product_types/{docId}": {
+      "schema": "CatalogRecord",
+      "description": "Universal product types"
+    },
+    "/universal_categories/{docId}": {
+      "schema": "CatalogRecord",
+      "description": "Universal product categories"
+    },
+    "/universal_products/{docId}": {
+      "schema": "CatalogRecord",
+      "description": "Universal products"
+    },
+    "/payment_methods/{docId}": {
+      "schema": "CatalogRecord",
+      "description": "Configured payment methods"
+    },
+    "/courier_providers/{docId}": {
+      "schema": "CatalogRecord",
+      "description": "Configured courier providers"
+    },
+    "/delivery_zones/{docId}": {
+      "schema": "CatalogRecord",
+      "description": "Delivery zones and charges"
+    },
+    "/orders/{docId}": {
+      "schema": "OrderRecord",
+      "description": "Customer orders restricted to owner or admin"
+    },
+    "/profiles/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profiles isolated to owner or admin"
+    }
+  }
+}

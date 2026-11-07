@@ -1,0 +1,143 @@
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
+import { User, Session } from "@supabase/supabase-js";
+import { onAuthStateChanged, signOut as firebaseSignOut, signInWithPopup } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
+import { auth, db, googleAuthProvider, handleFirestoreError, OperationType } from "@/lib/firebase";
+import { supabase } from "@/integrations/supabase/client";
+import { trackCompleteRegistration, trackLogin } from "@/lib/analytics";
+import { logLoginEvent } from "@/hooks/useAuditLog";
+import { useSessionTracker } from "@/hooks/useSessionTracker";
+import { toast } from "sonner";
+
+interface AuthContextType {
+  user: User | null;
+  session: Session | null;
+  loading: boolean;
+  signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signOut: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const signOutFn = useCallback(async () => {
+    const currentUser = user;
+    await firebaseSignOut(auth).catch(() => {});
+    await supabase.auth.signOut().catch(() => {});
+    setUser(null);
+    setSession(null);
+    if (currentUser?.email) {
+      logLoginEvent(currentUser.email, true, 'logout');
+      toast.success(`${currentUser.email} → লগ আউট সফল`);
+    }
+  }, [user]);
+
+  // Session tracker for auto-logout
+  const { endSession } = useSessionTracker(user?.id ?? null, signOutFn);
+
+  useEffect(() => {
+    const unsubscribeFirebase = onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser) {
+        const token = await fbUser.getIdToken();
+        const mappedUser: User = {
+          id: fbUser.uid,
+          app_metadata: { provider: 'google' },
+          user_metadata: {
+            full_name: fbUser.displayName || fbUser.email?.split('@')[0] || '',
+            avatar_url: fbUser.photoURL || '',
+          },
+          aud: 'authenticated',
+          created_at: fbUser.metadata.creationTime || new Date().toISOString(),
+          email: fbUser.email || undefined,
+          phone: fbUser.phoneNumber || undefined,
+        };
+        const mappedSession: Session = {
+          access_token: token,
+          refresh_token: fbUser.refreshToken,
+          expires_in: 3600,
+          token_type: 'bearer',
+          user: mappedUser,
+        };
+        setUser(mappedUser);
+        setSession(mappedSession);
+      } else {
+        setUser(null);
+        setSession(null);
+      }
+      setLoading(false);
+    });
+
+    return () => {
+      unsubscribeFirebase();
+    };
+  }, []);
+
+  const signUp = async (email: string, _password: string, fullName: string) => {
+    try {
+      const credential = await signInWithPopup(auth, googleAuthProvider);
+      const fbUser = credential.user;
+      if (fbUser) {
+        const profilePath = `profiles/${fbUser.uid}`;
+        try {
+          await setDoc(
+            doc(db, 'profiles', fbUser.uid),
+            {
+              id: fbUser.uid,
+              email: fbUser.email || email,
+              full_name: fullName || fbUser.displayName || '',
+              created_at: new Date().toISOString(),
+            },
+            { merge: true }
+          );
+        } catch (err) {
+          if (err instanceof Error && err.message.includes('Missing or insufficient permissions')) {
+            handleFirestoreError(err, OperationType.WRITE, profilePath);
+          }
+        }
+      }
+      trackCompleteRegistration('google');
+      return { error: null };
+    } catch (error: any) {
+      return { error: error as Error };
+    }
+  };
+
+  const signIn = async (email: string, _password: string) => {
+    try {
+      const credential = await signInWithPopup(auth, googleAuthProvider);
+      const signedInEmail = credential.user.email || email;
+      trackLogin('google');
+      logLoginEvent(signedInEmail, true, 'login');
+      toast.success(`${signedInEmail} → লগইন সফল`);
+      return { error: null };
+    } catch (error: any) {
+      logLoginEvent(email, false, 'login_failed');
+      toast.error('লগইন ব্যর্থ হয়েছে (Google Sign-In ব্যবহার করুন)');
+      return { error: error as Error };
+    }
+  };
+
+  const signOut = useCallback(async () => {
+    await endSession();
+    await signOutFn();
+  }, [endSession, signOutFn]);
+
+  return (
+    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signOut }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
+};

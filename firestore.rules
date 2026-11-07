@@ -1,0 +1,198 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net (Default-Deny Catch-All)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Hardened Global Helpers
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    function incoming() {
+      return request.resource.data;
+    }
+    function existing() {
+      return resource.data;
+    }
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+    function isAdmin() {
+      return isVerifiedUser() && (
+        request.auth.token.email == 'help.boialo@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidCatalogDoc(data, docId) {
+      return data.keys().hasAll(['id']) &&
+             data.id is string &&
+             data.id.size() >= 1 &&
+             data.id.size() <= 128 &&
+             data.id == docId;
+    }
+
+    function isValidProfile(data, userId) {
+      return data.keys().hasAll(['id', 'email']) &&
+             data.keys().hasOnly(['id', 'email', 'full_name', 'phone', 'avatar_url', 'created_at', 'updated_at']) &&
+             data.id is string && data.id.size() <= 128 && data.id == userId &&
+             data.email is string && data.email.size() <= 320 &&
+             (!('full_name' in data) || (data.full_name is string && data.full_name.size() <= 200)) &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() <= 32));
+    }
+
+    function isValidOrder(data, docId) {
+      return data.keys().hasAll(['id', 'user_id', 'status']) &&
+             data.id is string && data.id.size() <= 128 && data.id == docId &&
+             data.user_id is string && data.user_id.size() <= 128 &&
+             data.status is string && data.status.size() <= 64;
+    }
+
+    // Connection verification endpoint
+    match /test/{docId} {
+      allow get: if isValidId(docId);
+    }
+
+    // Admins collection
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && isValidId(adminId) && (request.auth.uid == adminId || isAdmin());
+      allow create, update, delete: if isAdmin() && isValidId(adminId);
+    }
+
+    // Private User Profiles (PII Isolated to Owner or Admin)
+    match /profiles/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if isSignedIn() && (resource.data.id == request.auth.uid || isAdmin());
+      allow create: if isVerifiedUser() && isValidId(userId) && request.auth.uid == userId && isValidProfile(incoming(), userId);
+      allow update: if isVerifiedUser() && isValidId(userId) && isValidProfile(incoming(), userId) &&
+                    incoming().id == existing().id && (
+                      isAdmin() ||
+                      (request.auth.uid == userId && incoming().diff(existing()).affectedKeys().hasOnly(['full_name', 'phone', 'avatar_url', 'updated_at']))
+                    );
+      allow delete: if isAdmin() && isValidId(userId);
+    }
+
+    // Customer Orders (Isolated to Owner or Admin)
+    match /orders/{docId} {
+      allow get: if isSignedIn() && isValidId(docId) && (resource.data.user_id == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.user_id == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidId(docId) && isValidOrder(incoming(), docId) && incoming().user_id == request.auth.uid;
+      allow update: if isSignedIn() && isValidId(docId) && isValidOrder(incoming(), docId) &&
+                    incoming().id == existing().id &&
+                    incoming().user_id == existing().user_id && (
+                      isAdmin() ||
+                      (existing().user_id == request.auth.uid && existing().status == 'pending' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updated_at']))
+                    );
+      allow delete: if isAdmin() && isValidId(docId);
+    }
+
+    // Public Storefront Catalog & Configuration Collections
+    match /site_settings/{docId} {
+      allow get: if isValidId(docId);
+      allow list: if resource.data.id is string;
+      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/site_settings/$(docId)) || isAdmin());
+      allow update, delete: if isAdmin() && isValidId(docId);
+    }
+    match /navigation_menus/{docId} {
+      allow get: if isValidId(docId);
+      allow list: if resource.data.id is string;
+      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/navigation_menus/$(docId)) || isAdmin());
+      allow update, delete: if isAdmin() && isValidId(docId);
+    }
+    match /menu_items/{docId} {
+      allow get: if isValidId(docId);
+      allow list: if resource.data.id is string;
+      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/menu_items/$(docId)) || isAdmin());
+      allow update, delete: if isAdmin() && isValidId(docId);
+    }
+    match /footer_sections/{docId} {
+      allow get: if isValidId(docId);
+      allow list: if resource.data.id is string;
+      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/footer_sections/$(docId)) || isAdmin());
+      allow update, delete: if isAdmin() && isValidId(docId);
+    }
+    match /footer_links/{docId} {
+      allow get: if isValidId(docId);
+      allow list: if resource.data.id is string;
+      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/footer_links/$(docId)) || isAdmin());
+      allow update, delete: if isAdmin() && isValidId(docId);
+    }
+    match /banners/{docId} {
+      allow get: if isValidId(docId);
+      allow list: if resource.data.id is string;
+      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/banners/$(docId)) || isAdmin());
+      allow update, delete: if isAdmin() && isValidId(docId);
+    }
+    match /categories/{docId} {
+      allow get: if isValidId(docId);
+      allow list: if resource.data.id is string;
+      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/categories/$(docId)) || isAdmin());
+      allow update, delete: if isAdmin() && isValidId(docId);
+    }
+    match /writers/{docId} {
+      allow get: if isValidId(docId);
+      allow list: if resource.data.id is string;
+      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/writers/$(docId)) || isAdmin());
+      allow update, delete: if isAdmin() && isValidId(docId);
+    }
+    match /publishers/{docId} {
+      allow get: if isValidId(docId);
+      allow list: if resource.data.id is string;
+      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/publishers/$(docId)) || isAdmin());
+      allow update, delete: if isAdmin() && isValidId(docId);
+    }
+    match /products/{docId} {
+      allow get: if isValidId(docId);
+      allow list: if resource.data.id is string;
+      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/products/$(docId)) || isAdmin());
+      allow update, delete: if isAdmin() && isValidId(docId);
+    }
+    match /homepage_sections/{docId} {
+      allow get: if isValidId(docId);
+      allow list: if resource.data.id is string;
+      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/homepage_sections/$(docId)) || isAdmin());
+      allow update, delete: if isAdmin() && isValidId(docId);
+    }
+    match /product_types/{docId} {
+      allow get: if isValidId(docId);
+      allow list: if resource.data.id is string;
+      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/product_types/$(docId)) || isAdmin());
+      allow update, delete: if isAdmin() && isValidId(docId);
+    }
+    match /universal_categories/{docId} {
+      allow get: if isValidId(docId);
+      allow list: if resource.data.id is string;
+      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/universal_categories/$(docId)) || isAdmin());
+      allow update, delete: if isAdmin() && isValidId(docId);
+    }
+    match /universal_products/{docId} {
+      allow get: if isValidId(docId);
+      allow list: if resource.data.id is string;
+      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/universal_products/$(docId)) || isAdmin());
+      allow update, delete: if isAdmin() && isValidId(docId);
+    }
+    match /payment_methods/{docId} {
+      allow get: if isValidId(docId);
+      allow list: if resource.data.id is string;
+      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/payment_methods/$(docId)) || isAdmin());
+      allow update, delete: if isAdmin() && isValidId(docId);
+    }
+    match /courier_providers/{docId} {
+      allow get: if isValidId(docId);
+      allow list: if resource.data.id is string;
+      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/courier_providers/$(docId)) || isAdmin());
+      allow update, delete: if isAdmin() && isValidId(docId);
+    }
+    match /delivery_zones/{docId} {
+      allow get: if isValidId(docId);
+      allow list: if resource.data.id is string;
+      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/delivery_zones/$(docId)) || isAdmin());
+      allow update, delete: if isAdmin() && isValidId(docId);
+    }
+  }
+}

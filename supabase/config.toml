@@ -1,0 +1,65 @@
+project_id = "nyzvjuzrkhdbuqlcxhzn"
+
+[functions.generate-invoice]
+verify_jwt = false
+
+[functions.search]
+verify_jwt = false
+
+[functions.send-otp]
+verify_jwt = false
+
+[functions.order-sms-notify]
+verify_jwt = false
+
+[functions.admin-invoice]
+verify_jwt = false
+
+[functions.preorder-processor]
+verify_jwt = false
+
+[functions.send-email]
+verify_jwt = false
+
+[functions.abandoned-cart-reminder]
+verify_jwt = false
+
+[functions.offer-notification]
+verify_jwt = false
+
+[functions.courier-booking]
+verify_jwt = false
+
+[functions.generate-sitemap]
+verify_jwt = false
+
+[functions.bkash-payment]
+verify_jwt = false
+
+[functions.update-provider-config]
+verify_jwt = false
+
+[functions.auto-product-notify]
+verify_jwt = false
+
+[functions.social-media-post]
+verify_jwt = false
+
+[functions.admin-create-user]
+verify_jwt = false
+
+[functions.image-search]
+verify_jwt = false
+
+[functions.admin-backup]
+verify_jwt = false
+
+[functions.ad-platform-events]
+verify_jwt = false
+
+[functions.ad-audience-sync]
+verify_jwt = false
+
+[functions.ai-chat]
+verify_jwt = false
+
