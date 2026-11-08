@@ -11,7 +11,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CreditCard, Smartphone, Truck, ChevronLeft, Loader2, Shield, Phone, Ticket, Zap, Star, Package, Lock, Check, AlertCircle } from "lucide-react";
+import { CreditCard, Smartphone, Truck, ChevronLeft, Loader2, Shield, Phone, Ticket, Zap, Star, Package, Lock, Check, AlertCircle, Gift, DollarSign, Sparkles } from "lucide-react";
 import { useCartContext } from "@/contexts/CartContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,6 +21,7 @@ import { z } from "zod";
 import { trackInitiateCheckout, trackAddPaymentInfo, trackAddShippingInfo, trackPurchase } from "@/lib/analytics";
 import { serverTrackInitiateCheckout, serverTrackPurchase } from "@/lib/serverTracking";
 import { cn } from "@/lib/utils";
+import { useLoyaltyPoints } from "@/hooks/useLoyaltyPoints";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -46,6 +47,15 @@ const Checkout = () => {
   const navigate = useNavigate();
   const { cartItems, subtotal, clearCart, loading: cartLoading } = useCartContext();
   const { user, loading: authLoading } = useAuth();
+  const {
+    totalPoints,
+    settings: loyaltySettings,
+    redeemPoints: redeemLoyaltyPoints,
+    redeemFreeDelivery: redeemLoyaltyFreeDelivery,
+    calculateEarnedPoints,
+    addPoints: addLoyaltyPoints,
+    applyReferralCode: applyLoyaltyReferralCode,
+  } = useLoyaltyPoints();
 
   const [formData, setFormData] = useState({
     fullName: "", phone: "", email: "", address: "", notes: "", transactionId: "",
@@ -64,6 +74,13 @@ const Checkout = () => {
   const [pricingRules, setPricingRules] = useState<any[]>([]);
   const [dynamicDiscount, setDynamicDiscount] = useState(0);
   const [dynamicDiscountLabel, setDynamicDiscountLabel] = useState("");
+
+  // Points & Referral State
+  const [pointRedeemMode, setPointRedeemMode] = useState<'none' | 'free_delivery' | 'discount'>('none');
+  const [pointsToRedeem, setPointsToRedeem] = useState<number>(0);
+  const [checkoutReferralCode, setCheckoutReferralCode] = useState<string>('');
+  const [isApplyingReferral, setIsApplyingReferral] = useState(false);
+  const [referralFeedback, setReferralFeedback] = useState<{ success: boolean; message: string } | null>(null);
 
   // OTP States
   const [showOtpDialog, setShowOtpDialog] = useState(false);
@@ -162,7 +179,6 @@ const Checkout = () => {
     if (countdown > 0) { const t = setTimeout(() => setCountdown(countdown - 1), 1000); return () => clearTimeout(t); }
   }, [countdown]);
 
-  useEffect(() => { if (!authLoading && !user) { toast.error("অর্ডার করতে প্রথমে লগইন করুন"); navigate("/signin"); } }, [user, authLoading]);
   useEffect(() => { if (!cartLoading && cartItems.length === 0) { toast.error("আপনার কার্ট খালি"); navigate("/cart"); } }, [cartItems, cartLoading]);
 
   // Pre-fill profile
@@ -203,7 +219,21 @@ const Checkout = () => {
   const deliveryCharge = getDeliveryCharge();
   const selectedZone = deliveryZones.find(z => z.id === selectedZoneId);
   const couponDiscount = appliedCoupon?.discount_amount || 0;
-  const total = Math.max(0, subtotal - couponDiscount - dynamicDiscount + deliveryCharge);
+
+  // Loyalty & Referral calculations
+  const freeDeliveryPointsNeeded = loyaltySettings?.free_delivery_points || 60;
+  const canRedeemFreeDelivery = (totalPoints || 0) >= freeDeliveryPointsNeeded;
+  const isFreeDeliveryApplied = pointRedeemMode === 'free_delivery' && canRedeemFreeDelivery;
+  const effectiveDeliveryCharge = isFreeDeliveryApplied ? 0 : deliveryCharge;
+
+  const basePayable = Math.max(0, subtotal - couponDiscount - dynamicDiscount);
+  const pointsRate = loyaltySettings?.points_value_taka || 1;
+  const pointsDiscount = pointRedeemMode === 'discount'
+    ? Math.min(Math.floor(pointsToRedeem * pointsRate), basePayable)
+    : 0;
+
+  const total = Math.max(0, basePayable - pointsDiscount + effectiveDeliveryCharge);
+  const earnedOrderPoints = calculateEarnedPoints(subtotal);
   const deliveryAreaLabel = deliveryZones.length > 0 ? (selectedZone?.zone_name_bn || "default") : (deliveryArea === "outside" ? "ঢাকার বাইরে" : "ঢাকার ভিতরে");
 
   const paymentLogoMap: Record<string, string> = {
@@ -310,16 +340,17 @@ const Checkout = () => {
   };
 
   const placeOrder = async () => {
-    if (!user) return;
     setIsSubmitting(true);
     try {
       const orderNumber = generateOrderNumber();
       const orderTotal = total;
+      const cleanPhone = formData.phone.replace(/[^0-9]/g, "");
+      const effectiveUserId = user?.id || (cleanPhone ? `guest-${cleanPhone}` : `guest-${Date.now()}`);
       const apiPaymentMethods = ["bkash", "nagad", "sslcommerz"];
       const isApiPayment = apiPaymentMethods.includes(paymentMethod) && paymentMethods.find((m: any) => m.id === paymentMethod)?.payment_mode === "api";
       const { data: order, error: orderError } = await supabase.from("orders").insert({
-        user_id: user.id, order_number: orderNumber, status: isApiPayment ? "payment_pending" : "pending",
-        subtotal, delivery_charge: deliveryCharge, total: orderTotal, payment_method: paymentMethod,
+        user_id: effectiveUserId, order_number: orderNumber, status: isApiPayment ? "payment_pending" : "pending",
+        subtotal, delivery_charge: effectiveDeliveryCharge, total: orderTotal, payment_method: paymentMethod,
         transaction_id: isApiPayment ? null : (formData.transactionId || null),
         delivery_area: deliveryAreaLabel,
         full_name: formData.fullName.trim(), phone: formData.phone.trim(), email: formData.email?.trim() || null,
@@ -334,6 +365,34 @@ const Checkout = () => {
       }));
       const { error: itemsError } = await supabase.from("order_items").insert(orderItemsData);
       if (itemsError) throw itemsError;
+
+      // Handle Points Redemption and Earning
+      if (user) {
+        try {
+          if (isFreeDeliveryApplied) {
+            await redeemLoyaltyFreeDelivery(order.id);
+          } else if (pointRedeemMode === 'discount' && pointsToRedeem > 0) {
+            await redeemLoyaltyPoints(pointsToRedeem, order.id);
+          }
+
+          // Credit points earned on this order!
+          if (earnedOrderPoints > 0) {
+            await addLoyaltyPoints(
+              earnedOrderPoints,
+              'order_reward',
+              `অর্ডার #${orderNumber} সম্পন্ন করার জন্য রিওয়ার্ড পয়েন্ট`,
+              order.id
+            );
+          }
+
+          // Apply friend's referral code if entered during checkout
+          if (checkoutReferralCode.trim() && (!referralFeedback || !referralFeedback.success)) {
+            await applyLoyaltyReferralCode(checkoutReferralCode.trim());
+          }
+        } catch (pointErr) {
+          console.warn("Points processing error:", pointErr);
+        }
+      }
 
       if (abandonedCheckoutId) {
         await supabase.from("abandoned_checkouts").update({ recovered: true, recovered_order_id: order.id }).eq("id", abandonedCheckoutId);
@@ -370,7 +429,7 @@ const Checkout = () => {
   };
 
   const handlePlaceOrder = async () => {
-    if (!validateForm() || !user) return;
+    if (!validateForm()) return;
     if (isOtpRequired() && !phoneVerified) {
       setShowOtpDialog(true); setOtpValue(""); setOtpError("");
       await sendOtp();
@@ -405,7 +464,19 @@ const Checkout = () => {
           </div>
         </div>
 
-        <h1 className="text-2xl font-bold mb-6">চেকআউট</h1>
+        {!user && (
+          <div className="mb-6 p-3.5 sm:p-4 rounded-xl bg-primary/5 border border-primary/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm">
+            <div className="flex items-center gap-2.5">
+              <span className="text-base">💡</span>
+              <p className="text-foreground text-xs sm:text-sm">
+                বইআলোতে পূর্বের অ্যাকাউন্ট থাকলে লগইন করতে পারেন, অথবা সরাসরি অতিথি হিসেবে তথ্য পূরণ করে অর্ডার সম্পন্ন করুন।
+              </p>
+            </div>
+            <Link to="/signin" className="shrink-0 text-primary font-semibold text-xs sm:text-sm hover:underline">
+              লগইন করুন →
+            </Link>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* ===== LEFT: Form ===== */}
@@ -746,6 +817,177 @@ const Checkout = () => {
                 />
               </div>
 
+              {/* Loyalty Points & Referral Redemption */}
+              <div className="px-5 py-4 border-b border-border bg-gradient-to-br from-primary/5 via-background to-accent/5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                      <Gift className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-xs">লয়্যালটি পয়েন্ট ওয়ালেট</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {user ? `আপনার ব্যালেন্স: ${totalPoints} পয়েন্ট (৳${totalPoints * (loyaltySettings?.points_value_taka || 1)})` : "লগইন করে পয়েন্ট রিডিম করুন"}
+                      </p>
+                    </div>
+                  </div>
+                  {user && (
+                    <Badge variant="outline" className="border-primary/30 text-primary text-[10px] font-bold">
+                      ১পয়েন্ট = ১টাকা
+                    </Badge>
+                  )}
+                </div>
+
+                {user && totalPoints > 0 ? (
+                  <div className="space-y-2 pt-1 text-xs">
+                    {/* Mode 1: No points */}
+                    <label className={cn(
+                      "flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer transition-colors",
+                      pointRedeemMode === 'none' ? "border-primary bg-primary/5" : "border-border hover:bg-muted/40"
+                    )}>
+                      <input
+                        type="radio"
+                        name="pointMode"
+                        checked={pointRedeemMode === 'none'}
+                        onChange={() => {
+                          setPointRedeemMode('none');
+                          setPointsToRedeem(0);
+                        }}
+                        className="text-primary"
+                      />
+                      <span className="font-medium text-foreground">পয়েন্ট ব্যবহার করব না</span>
+                    </label>
+
+                    {/* Mode 2: Free Home Delivery */}
+                    <label className={cn(
+                      "flex items-start gap-2 p-2.5 rounded-xl border cursor-pointer transition-colors",
+                      !canRedeemFreeDelivery ? "opacity-60 cursor-not-allowed border-dashed" : pointRedeemMode === 'free_delivery' ? "border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20" : "border-border hover:bg-muted/40"
+                    )}>
+                      <input
+                        type="radio"
+                        name="pointMode"
+                        disabled={!canRedeemFreeDelivery}
+                        checked={pointRedeemMode === 'free_delivery'}
+                        onChange={() => {
+                          setPointRedeemMode('free_delivery');
+                          setPointsToRedeem(0);
+                        }}
+                        className="text-primary mt-0.5"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-foreground flex items-center gap-1">
+                            <Truck className="w-3.5 h-3.5 text-primary" /> ফ্রি হোম ডেলিভারি
+                          </span>
+                          <span className="font-bold text-emerald-600">{freeDeliveryPointsNeeded} পয়েন্ট</span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          {canRedeemFreeDelivery
+                            ? `ডেলিভারি চার্জ সম্পূর্ণ ৳০ হবে (${freeDeliveryPointsNeeded} পয়েন্ট কর্তন)`
+                            : `ন্যূনতম ${freeDeliveryPointsNeeded} পয়েন্ট প্রয়োজন (ঘাটতি: ${freeDeliveryPointsNeeded - totalPoints} পয়েন্ট)`}
+                        </p>
+                      </div>
+                    </label>
+
+                    {/* Mode 3: Cash Discount */}
+                    <div className={cn(
+                      "p-2.5 rounded-xl border transition-colors space-y-2",
+                      pointRedeemMode === 'discount' ? "border-primary bg-primary/5" : "border-border"
+                    )}>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="pointMode"
+                          checked={pointRedeemMode === 'discount'}
+                          onChange={() => {
+                            setPointRedeemMode('discount');
+                            setPointsToRedeem(Math.min(totalPoints, basePayable));
+                          }}
+                          className="text-primary"
+                        />
+                        <span className="font-bold text-foreground flex items-center gap-1">
+                          <DollarSign className="w-3.5 h-3.5 text-emerald-600" /> সরাসরি মূল্যছাড় (১ পয়েন্ট = ১ টাকা)
+                        </span>
+                      </label>
+                      {pointRedeemMode === 'discount' && (
+                        <div className="pl-6 pt-1 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              min={1}
+                              max={Math.min(totalPoints, basePayable)}
+                              value={pointsToRedeem || ""}
+                              onChange={(e) => setPointsToRedeem(Math.min(Number(e.target.value), totalPoints, basePayable))}
+                              className="h-8 text-xs font-bold w-24"
+                            />
+                            <span className="text-[11px] text-muted-foreground">পয়েন্ট = <strong>৳{pointsDiscount}</strong> ছাড়</span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 text-[10px] ml-auto py-0 px-2"
+                              onClick={() => setPointsToRedeem(Math.min(totalPoints, basePayable))}
+                            >
+                              সর্বোচ্চ
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : user ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    আপনার ওয়ালেটে বর্তমানে পয়েন্ট নেই। এই অর্ডার সম্পন্ন করলে আপনি পাবেন <strong>+{earnedOrderPoints} পয়েন্ট</strong>!
+                  </p>
+                ) : null}
+
+                {/* Friend Referral Code Box at Checkout */}
+                <div className="pt-2 border-t border-border/60">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <span className="text-[11px] font-semibold text-foreground flex items-center gap-1">
+                      <Gift className="w-3 h-3 text-primary" /> বন্ধুর রেফারাল কোড থাকলে দিন (+৫০ পয়েন্ট বোনাস)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      placeholder="যেমন: BOI-XYZ123"
+                      value={checkoutReferralCode}
+                      onChange={(e) => setCheckoutReferralCode(e.target.value.toUpperCase())}
+                      className="h-8 text-xs uppercase font-mono"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={!checkoutReferralCode.trim() || isApplyingReferral}
+                      onClick={async () => {
+                        if (!user) {
+                          toast.error("রেফারাল কোড যোগ করতে অনুগ্রহ করে লগইন করুন");
+                          return;
+                        }
+                        setIsApplyingReferral(true);
+                        const res = await applyLoyaltyReferralCode(checkoutReferralCode);
+                        setReferralFeedback(res);
+                        if (res.success) {
+                          toast.success(res.message);
+                        } else {
+                          toast.error(res.message);
+                        }
+                        setIsApplyingReferral(false);
+                      }}
+                      className="h-8 text-xs px-2.5 shrink-0"
+                    >
+                      {isApplyingReferral ? "..." : "যোগ"}
+                    </Button>
+                  </div>
+                  {referralFeedback && (
+                    <p className={cn("text-[11px] mt-1 font-medium", referralFeedback.success ? "text-emerald-600" : "text-destructive")}>
+                      {referralFeedback.message}
+                    </p>
+                  )}
+                </div>
+              </div>
+
               {/* Price Breakdown */}
               <div className="px-5 py-5 space-y-3 text-sm">
                 <div className="flex justify-between">
@@ -764,10 +1006,23 @@ const Checkout = () => {
                     <span>-৳{dynamicDiscount}</span>
                   </div>
                 )}
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground flex items-center gap-1"><Truck className="w-3.5 h-3.5" /> ডেলিভারি</span>
-                  <span className="font-medium">৳{deliveryCharge}</span>
-                </div>
+                {isFreeDeliveryApplied ? (
+                  <div className="flex justify-between text-emerald-600 font-semibold">
+                    <span className="flex items-center gap-1"><Truck className="w-3.5 h-3.5" /> পয়েন্ট দিয়ে ফ্রি ডেলিভারি</span>
+                    <span>ফ্রি (৳০)</span>
+                  </div>
+                ) : (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground flex items-center gap-1"><Truck className="w-3.5 h-3.5" /> ডেলিভারি</span>
+                    <span className="font-medium">৳{deliveryCharge}</span>
+                  </div>
+                )}
+                {pointsDiscount > 0 && (
+                  <div className="flex justify-between text-emerald-600 font-semibold">
+                    <span className="flex items-center gap-1"><DollarSign className="w-3.5 h-3.5" /> পয়েন্ট ডিসকাউন্ট ({pointsToRedeem} পয়েন্ট)</span>
+                    <span>-৳{pointsDiscount}</span>
+                  </div>
+                )}
 
                 <div className="border-t border-border pt-4 mt-1">
                   <div className="flex justify-between items-center">
@@ -775,6 +1030,12 @@ const Checkout = () => {
                     <span className="font-bold text-2xl text-primary">৳{total}</span>
                   </div>
                 </div>
+
+                {earnedOrderPoints > 0 && (
+                  <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/20 text-center text-xs text-primary font-bold flex items-center justify-center gap-1.5 mt-2">
+                    <Sparkles className="w-3.5 h-3.5 text-primary" /> এই অর্ডারে আপনি পাচ্ছেন +{earnedOrderPoints} লয়্যালটি পয়েন্ট!
+                  </div>
+                )}
               </div>
 
               {/* Place Order (Desktop) */}

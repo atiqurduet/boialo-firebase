@@ -18,8 +18,7 @@ import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
 import { useProductBundles } from "@/hooks/useProductBundles";
 import { useCartContext } from "@/contexts/CartContext";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Heart, ChevronRight, BookOpen, ShoppingCart, Package, Clock, ArrowRight, Zap } from "lucide-react";
+import { Heart, ChevronRight, BookOpen, ShoppingCart, Package, Clock, ArrowRight, Zap, Truck, CheckCircle, ShieldCheck, Headphones } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useWishlistContext } from "@/contexts/WishlistContext";
 import { format } from "date-fns";
@@ -29,8 +28,8 @@ import { trackViewContent } from "@/lib/analytics";
 import { toast } from "sonner";
 import { ProductQA } from "@/components/ProductQA";
 import { StockAlertButton } from "@/components/StockAlertButton";
-import { PriceDropAlert } from "@/components/PriceDropAlert";
 import { QuickCheckoutModal } from "@/components/QuickCheckoutModal";
+import { BookLookInsideModal } from "@/components/BookLookInsideModal";
 import {
   Dialog,
   DialogContent,
@@ -41,6 +40,7 @@ import {
 const ProductDetail = () => {
   const { slug } = useParams();
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewTab, setPreviewTab] = useState<"sample" | "toc" | "specs" | "pdf" | "audio">("sample");
   const [quickCheckoutOpen, setQuickCheckoutOpen] = useState(false);
   const [preorderMessage, setPreorderMessage] = useState<string>("");
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
@@ -386,6 +386,40 @@ const ProductDetail = () => {
                     {getCategoryName()}
                   </Link>
                 </p>
+                {dbProduct.edition && (
+                  <p>
+                    <span className="text-muted-foreground">সংস্করণ : </span>
+                    <span className="font-medium text-foreground">{dbProduct.edition}</span>
+                  </p>
+                )}
+                {dbProduct.pages && (
+                  <p>
+                    <span className="text-muted-foreground">পৃষ্ঠা সংখ্যা : </span>
+                    <span className="font-medium text-foreground">{dbProduct.pages}</span>
+                  </p>
+                )}
+                {dbProduct.binding && (
+                  <p>
+                    <span className="text-muted-foreground">বাঁধাই : </span>
+                    <span className="font-medium text-foreground">{dbProduct.binding}</span>
+                  </p>
+                )}
+                {dbProduct.language && (
+                  <p>
+                    <span className="text-muted-foreground">ভাষা : </span>
+                    <span className="font-medium text-foreground">{dbProduct.language}</span>
+                  </p>
+                )}
+                {dbProduct.attributes && typeof dbProduct.attributes === 'object' && (
+                  Object.entries(dbProduct.attributes as Record<string, any>).map(([attrKey, attrVal]) => (
+                    attrVal ? (
+                      <p key={attrKey}>
+                        <span className="text-muted-foreground">{attrKey} : </span>
+                        <span className="font-medium text-foreground">{String(attrVal)}</span>
+                      </p>
+                    ) : null
+                  ))
+                )}
               </div>
 
               {/* Pre-order Notice */}
@@ -466,20 +500,61 @@ const ProductDetail = () => {
                 )}
               </div>
 
-              <Button 
-                className="w-full bg-accent hover:bg-accent/90"
-                onClick={() => setPreviewOpen(true)}
-                disabled={!previewUrl}
-              >
-                <BookOpen className="w-4 h-4 mr-2" />
-                একটু পড়ুন
-              </Button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <Button 
+                  variant="outline"
+                  className="w-full border-primary/30 hover:bg-primary/5 hover:border-primary text-primary font-medium py-2.5 transition-all flex items-center justify-center gap-2"
+                  onClick={() => {
+                    setPreviewTab("sample");
+                    setPreviewOpen(true);
+                  }}
+                >
+                  <BookOpen className="w-4 h-4 text-primary" />
+                  একটু পড়ে দেখুন
+                </Button>
+                <Button 
+                  variant="outline"
+                  className="w-full border-amber-500/40 hover:bg-amber-500/10 hover:border-amber-500 text-amber-800 dark:text-amber-300 font-medium py-2.5 transition-all flex items-center justify-center gap-2"
+                  onClick={() => {
+                    setPreviewTab("audio");
+                    setPreviewOpen(true);
+                  }}
+                >
+                  <Headphones className="w-4 h-4 text-amber-500" />
+                  অডিও ভূমিকা শুনুন
+                </Button>
+              </div>
 
-              {!previewUrl && (
-                <p className="text-xs text-muted-foreground text-center">
-                  এই বইয়ের প্রিভিউ এখনো যোগ করা হয়নি
-                </p>
-              )}
+              {/* Delivery Assurance & Service Highlights */}
+              <div className="bg-muted/40 rounded-xl p-4 border border-border/60 space-y-2.5 text-xs">
+                <div className="flex items-center gap-2.5 text-foreground">
+                  <div className="w-6 h-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                    <Truck className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <span className="font-semibold">ডেলিভারি চার্জ: </span>
+                    <span className="text-muted-foreground">ঢাকা সিটিতে ৬০৳ (১-২ দিন), ঢাকার বাইরে ১০০৳ (২-৩ দিন)</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5 text-foreground">
+                  <div className="w-6 h-6 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
+                    <CheckCircle className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <span className="font-semibold">নিশ্চয়তা: </span>
+                    <span className="text-muted-foreground">১০০% আসল ও অরিজিনাল প্রিন্ট কপি</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5 text-foreground">
+                  <div className="w-6 h-6 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <span className="font-semibold">ক্যাশ অন ডেলিভারি: </span>
+                    <span className="text-muted-foreground">পণ্য হাতে পেয়ে মূল্য পরিশোধ করার সুবিধা</span>
+                  </div>
+                </div>
+              </div>
 
               {/* Wishlist & Share */}
               <div className="flex items-center gap-4 text-sm flex-wrap">
@@ -558,20 +633,73 @@ const ProductDetail = () => {
 
       <Footer />
 
-      {/* Secure Preview Dialog */}
-      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <BookOpen className="w-5 h-5" />
-              একটু পড়ুন - {product.title}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="overflow-auto max-h-[70vh]">
-            <SecurePdfViewer url={previewUrl} title={product.title} />
+      {/* Book Look Inside Preview Modal */}
+      <BookLookInsideModal
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        product={{
+          id: product.id,
+          title: product.title,
+          author: product.author,
+          publisher: getPublisherName(),
+          price: selectedVariant ? selectedVariant.price : product.price,
+          originalPrice: selectedVariant?.original_price || product.originalPrice,
+          discount: product.discount,
+          image: product.image,
+          description: dbProduct?.description || dbProduct?.short_description || "",
+          category: getCategoryName(),
+          pageCount: dbProduct?.pages,
+          edition: dbProduct?.edition,
+          binding: dbProduct?.binding,
+          language: dbProduct?.language,
+        }}
+        pdfUrl={previewUrl}
+        initialTab={previewTab}
+        onAddToCart={handleAddToCart}
+        onQuickCheckout={() => setQuickCheckoutOpen(true)}
+      />
+
+      {/* Mobile Sticky Order Dock */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-background/95 backdrop-blur-md border-t border-border p-3 shadow-lg flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <img
+            src={product.image}
+            alt={product.title}
+            className="w-10 h-13 object-cover rounded-md border border-border shrink-0"
+          />
+          <div className="min-w-0">
+            <h4 className="text-xs font-semibold text-foreground truncate">{product.title}</h4>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <span className="text-sm font-bold text-primary">
+                ৳{selectedVariant ? selectedVariant.price : product.price}
+              </span>
+              {(selectedVariant?.original_price || hasDiscount) && (
+                <span className="text-[10px] text-muted-foreground line-through">
+                  ৳{selectedVariant?.original_price || product.originalPrice}
+                </span>
+              )}
+            </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9 px-3 text-xs"
+            onClick={handleAddToCart}
+          >
+            <ShoppingCart className="w-3.5 h-3.5" />
+          </Button>
+          <button
+            onClick={() => setQuickCheckoutOpen(true)}
+            className="h-9 px-3.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs active:scale-95 transition-all"
+          >
+            <Zap className="w-3.5 h-3.5 fill-current" />
+            দ্রুত অর্ডার
+          </button>
+        </div>
+      </div>
 
       {/* Quick Checkout Modal */}
       <QuickCheckoutModal

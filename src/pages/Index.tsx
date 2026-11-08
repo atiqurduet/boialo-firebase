@@ -28,6 +28,11 @@ import { WeeklyBestUniversalProducts } from "@/components/WeeklyBestUniversalPro
 import { BundleShowcase } from "@/components/BundleShowcase";
 import { BestSellingBrands } from "@/components/BestSellingBrands";
 import { BestSellingPublishers } from "@/components/BestSellingPublishers";
+import { PromoTickerMarquee } from "@/components/PromoTickerMarquee";
+import { BookOfTheDaySpotlight } from "@/components/BookOfTheDaySpotlight";
+import { MidPageSponsorAdBillboard } from "@/components/MidPageSponsorAdBillboard";
+import { ReaderCommunityStats } from "@/components/ReaderCommunityStats";
+import { StickyBottomAdBar } from "@/components/StickyBottomAdBar";
 import { useHomepageData } from "@/hooks/useHomepageData";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -516,19 +521,109 @@ const Index = () => {
       {/* Dynamic Hero Slider */}
       <DynamicHeroSlider banners={banners} />
 
+      {/* Promotional Ticker Marquee */}
+      <PromoTickerMarquee />
+
       {/* Trust Badges */}
       <TrustBadges />
 
-      <div className="container py-5 md:py-8 space-y-1">
+      <div className="container py-5 md:py-8 space-y-6">
         {/* Featured Offer Banner */}
         <FeaturedOfferBanner />
 
-        {/* Render sections in order */}
-        {sections.map((section, index) => (
-          <div key={section.id} className={index > 2 ? "content-lazy" : ""}>
-            {renderSection(section)}
+        {/* Book of the Day Spotlight */}
+        <BookOfTheDaySpotlight
+          product={
+            products.length > 0
+              ? {
+                  id: products[0].id,
+                  title: products[0].title_bn,
+                  author: products[0].author || "জনপ্রিয় লেখক",
+                  publisher: products[0].publisher,
+                  price: products[0].price,
+                  originalPrice: products[0].original_price || undefined,
+                  discount: products[0].discount_percent || 20,
+                  image:
+                    Array.isArray(products[0].images) && products[0].images.length > 0
+                      ? products[0].images[0]
+                      : "/placeholder.svg",
+                  description: products[0].description_bn || undefined,
+                  slug: products[0].slug,
+                }
+              : undefined
+          }
+        />
+
+        {/* Render sections in order, or fallback to curated layout */}
+        {sections.length > 0 ? (
+          sections.map((section, index) => (
+            <div key={section.id} className={index > 2 ? "content-lazy" : ""}>
+              {renderSection(section)}
+            </div>
+          ))
+        ) : (
+          <div className="space-y-10 py-4">
+            {/* 1. Latest Books */}
+            <DynamicProductGrid
+              title="নতুন প্রকাশিত বইসমূহ"
+              subtitle="বইআলোর সংগ্রহে সদ্য যুক্ত হওয়া সেরা বইসমূহ"
+              products={products.slice(0, 10).map(p => ({
+                id: p.id,
+                slug: p.slug,
+                title: p.title_bn,
+                author: p.author || 'লেখক',
+                price: p.price,
+                originalPrice: p.original_price || undefined,
+                discount: p.discount_percent || undefined,
+                image: Array.isArray(p.images) && p.images.length > 0 ? p.images[0] : '/placeholder.svg',
+              }))}
+              viewAllLink="/shop?sort=newest"
+            />
+
+            {/* 2. Popular Categories */}
+            <DynamicCategorySection
+              title="জনপ্রিয় ক্যাটাগরি"
+              subtitle="আপনার পছন্দের বিষয়ে বই খুঁজুন"
+              categories={categories.slice(0, 8).map(c => ({
+                id: c.id,
+                slug: c.slug,
+                name: c.name_bn,
+                image: c.image_url || '/placeholder.svg',
+              }))}
+            />
+
+            {/* 3. Discounted Books */}
+            {discountedProducts.length > 0 && (
+              <DynamicProductGrid
+                title="সেরা ছাড়ের বইসমূহ"
+                subtitle="বিশেষ মূল্যে পছন্দের বই কিনুন"
+                products={discountedProducts.slice(0, 10).map(p => ({
+                  id: p.id,
+                  slug: p.slug,
+                  title: p.title_bn,
+                  author: p.author || 'লেখক',
+                  price: p.price,
+                  originalPrice: p.original_price || undefined,
+                  discount: p.discount_percent || undefined,
+                  image: Array.isArray(p.images) && p.images.length > 0 ? p.images[0] : '/placeholder.svg',
+                }))}
+                viewAllLink="/offers"
+              />
+            )}
+
+            {/* 4. Top Authors */}
+            <TopAuthorsSection />
+
+            {/* 5. Best Selling Publishers */}
+            <BestSellingPublishers />
           </div>
-        ))}
+        )}
+
+        {/* Mid-Page Sponsor Ad Billboard */}
+        <MidPageSponsorAdBillboard />
+
+        {/* Reader Community Stats & Testimonials */}
+        <ReaderCommunityStats />
 
         {/* Recently Viewed Products */}
         <div className="content-lazy">
@@ -539,6 +634,9 @@ const Index = () => {
       {/* Newsletter Section - always show at bottom */}
       <NewsletterSection />
       </main>
+
+      {/* Sticky Bottom Ad / Hot Deal Bar */}
+      <StickyBottomAdBar />
       <Footer />
     </div>
   );

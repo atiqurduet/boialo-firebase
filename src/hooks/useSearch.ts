@@ -73,11 +73,20 @@ export const useSearch = () => {
           body: { query, limit, includeCategories: true },
         });
 
-        if (fnError) throw fnError;
+        if (fnError || !data || !Array.isArray(data.products)) {
+          await fallbackSearch(query, limit);
+          return;
+        }
 
         trackSearch({ search_term: query });
 
-        setResults(data || { products: [], categories: [], suggestions: [], autocomplete: [], totalProducts: 0 });
+        setResults({
+          products: Array.isArray(data.products) ? data.products : [],
+          categories: Array.isArray(data.categories) ? data.categories : [],
+          suggestions: Array.isArray(data.suggestions) ? data.suggestions : [],
+          autocomplete: Array.isArray(data.autocomplete) ? data.autocomplete : [],
+          totalProducts: typeof data.totalProducts === 'number' ? data.totalProducts : (data.products?.length || 0),
+        });
       } catch (err: any) {
         if (err.name !== 'AbortError') {
           console.error('Search error:', err);
@@ -164,6 +173,13 @@ export const useSearch = () => {
       });
     } catch (err) {
       console.error('Fallback search error:', err);
+      setResults({
+        products: [],
+        categories: [],
+        suggestions: [],
+        autocomplete: [],
+        totalProducts: 0,
+      });
     }
   };
 

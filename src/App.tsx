@@ -12,6 +12,7 @@ import { AnalyticsProvider } from "@/components/AnalyticsProvider";
 import { ThemeInitializer } from "./components/ThemeInitializer";
 import { CompareFloatingBar } from "./components/CompareFloatingBar";
 import { PopupBannerRenderer } from "./components/PopupBannerRenderer";
+import { WhatsAppFloatingButton } from "./components/WhatsAppFloatingButton";
 import ChatWidget from "./components/ChatWidget";
 
 // Critical path - load immediately
@@ -63,6 +64,8 @@ const Ebooks = lazy(() => import("./pages/Ebooks"));
 const EbookDetail = lazy(() => import("./pages/EbookDetail"));
 const Eproducts = lazy(() => import("./pages/Eproducts"));
 const Rewards = lazy(() => import("./pages/Rewards"));
+const Referral = lazy(() => import("./pages/Referral"));
+const SyllabusBundles = lazy(() => import("./pages/SyllabusBundles"));
 
 // Admin Pages - lazy loaded
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
@@ -160,7 +163,7 @@ const App = () => (
             <Toaster />
             <Sonner />
             <ThemeInitializer />
-            <BrowserRouter>
+            <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
               <AnalyticsProvider>
               <Suspense fallback={<PageLoader />}>
               <Routes>
@@ -204,8 +207,12 @@ const App = () => (
                 <Route path="/digital-library" element={<DigitalLibrary />} />
                 <Route path="/gift-cards" element={<GiftCards />} />
                 <Route path="/bundles" element={<Bundles />} />
+                <Route path="/syllabus" element={<SyllabusBundles />} />
+                <Route path="/booklist" element={<SyllabusBundles />} />
                 <Route path="/compare" element={<Compare />} />
                 <Route path="/rewards" element={<Rewards />} />
+                <Route path="/referral" element={<Referral />} />
+                <Route path="/wallet" element={<Referral />} />
                 <Route path="/ebooks" element={<Ebooks />} />
                 <Route path="/ebooks/:slug" element={<EbookDetail />} />
                 <Route path="/ebooks/:slug/read" element={<EbookReader />} />
@@ -286,6 +293,7 @@ const App = () => (
               </Routes>
               </Suspense>
               <ChatWidget />
+              <WhatsAppFloatingButton />
               <CompareFloatingBar />
               <PopupBannerRenderer />
               </AnalyticsProvider>

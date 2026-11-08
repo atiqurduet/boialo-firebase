@@ -23,6 +23,8 @@ import {
   Minus,
   Plus,
   AlertCircle,
+  Gift,
+  HeartHandshake,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -75,12 +77,22 @@ export function QuickCheckoutModal({
   const [dbPaymentMethods, setDbPaymentMethods] = useState<any[]>([]);
   const [profileLoaded, setProfileLoaded] = useState(false);
 
+  // Gift options
+  const [isGift, setIsGift] = useState(false);
+  const [giftRecipient, setGiftRecipient] = useState("");
+  const [giftMessage, setGiftMessage] = useState("");
+  const [giftWrap, setGiftWrap] = useState(true);
+
   // Fetch payment methods + prefill profile
   useEffect(() => {
     if (!open) return;
     setQuantity(1);
     setTransactionId("");
     setErrors({});
+    setIsGift(false);
+    setGiftRecipient("");
+    setGiftMessage("");
+    setGiftWrap(true);
 
     const fetchData = async () => {
       const [payRes] = await Promise.all([
@@ -113,7 +125,8 @@ export function QuickCheckoutModal({
   const unitPrice = variantPrice ?? product.price;
   const subtotal = unitPrice * quantity;
   const deliveryCharge = deliveryArea === "outside" ? 120 : 60;
-  const total = subtotal + deliveryCharge;
+  const giftWrapCharge = isGift && giftWrap ? 30 : 0;
+  const total = subtotal + deliveryCharge + giftWrapCharge;
 
   const paymentLogoMap: Record<string, string> = {
     bkash: "https://freelogopng.com/images/all_img/1656234841bkash-icon-png.png",
@@ -157,12 +170,8 @@ export function QuickCheckoutModal({
   };
 
   const handleSubmit = async () => {
-    if (!user) {
-      toast.error("অর্ডার করতে প্রথমে লগইন করুন");
-      onOpenChange(false);
-      navigate("/signin");
-      return;
-    }
+    const cleanPhone = formData.phone.replace(/[^0-9]/g, "");
+    const effectiveUserId = user?.id || (cleanPhone ? `guest-${cleanPhone}` : `guest-${Date.now()}`);
 
     try {
       quickSchema.parse(formData);
@@ -186,11 +195,14 @@ export function QuickCheckoutModal({
     try {
       const orderNumber = generateOrderNumber();
       const deliveryAreaLabel = deliveryArea === "outside" ? "ঢাকার বাইরে" : "ঢাকার ভিতরে";
+      const giftNotes = isGift
+        ? `[উপহার অর্ডার] প্রাপকের নাম: ${giftRecipient.trim() || formData.fullName.trim()}, চিরকুট: "${giftMessage.trim() || 'শুভকামনা'}", গিফট র‍্যাপিং: ${giftWrap ? 'হ্যাঁ (+৩০৳)' : 'না'}`
+        : null;
 
       const { data: order, error: orderError } = await supabase
         .from("orders")
         .insert({
-          user_id: user.id,
+          user_id: effectiveUserId,
           order_number: orderNumber,
           status: "pending",
           subtotal,
@@ -202,6 +214,7 @@ export function QuickCheckoutModal({
           full_name: formData.fullName.trim(),
           phone: formData.phone.trim(),
           address: formData.address.trim(),
+          notes: giftNotes,
         })
         .select()
         .single();
@@ -369,6 +382,60 @@ export function QuickCheckoutModal({
             </div>
           </div>
 
+          {/* Gift Order Option */}
+          <div className="rounded-xl border border-pink-200 dark:border-pink-900/60 bg-pink-50/40 dark:bg-pink-950/20 p-3.5 space-y-3">
+            <label className="flex items-center justify-between cursor-pointer">
+              <div className="flex items-center gap-2">
+                <Gift className="w-4 h-4 text-pink-600 dark:text-pink-400" />
+                <span className="text-xs font-semibold text-foreground">
+                  প্রিয়জনকে উপহার হিসেবে পাঠাতে চান?
+                </span>
+              </div>
+              <input
+                type="checkbox"
+                checked={isGift}
+                onChange={(e) => setIsGift(e.target.checked)}
+                className="w-4 h-4 rounded text-pink-600 focus:ring-pink-500 cursor-pointer"
+              />
+            </label>
+
+            {isGift && (
+              <div className="pt-2 border-t border-pink-200/60 dark:border-pink-900/40 space-y-2.5 text-xs">
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground">প্রাপকের নাম (কার কাছে পাঠাচ্ছেন)</Label>
+                  <Input
+                    className="h-8 text-xs rounded-lg bg-background"
+                    value={giftRecipient}
+                    onChange={(e) => setGiftRecipient(e.target.value)}
+                    placeholder="যেমন: আবরার রহমান"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground">উপহার চিরকুট / শুভেচ্ছা বার্তা</Label>
+                  <Input
+                    className="h-8 text-xs rounded-lg bg-background"
+                    value={giftMessage}
+                    onChange={(e) => setGiftMessage(e.target.value)}
+                    placeholder="যেমন: শুভ জন্মদিন প্রিয় বন্ধু! অনেক অনেক দোয়া রইল।"
+                  />
+                </div>
+
+                <label className="flex items-center gap-2 cursor-pointer pt-1">
+                  <input
+                    type="checkbox"
+                    checked={giftWrap}
+                    onChange={(e) => setGiftWrap(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded text-pink-600"
+                  />
+                  <span className="text-[11px] text-foreground">
+                    প্রিমিয়াম গিফট র‍্যাপিং ও রিবন প্যাকেজিং (+৳৩০)
+                  </span>
+                </label>
+              </div>
+            )}
+          </div>
+
           {/* Payment */}
           <div className="space-y-2">
             <Label className="text-xs font-semibold">পেমেন্ট মেথড</Label>
@@ -446,6 +513,12 @@ export function QuickCheckoutModal({
               <span>ডেলিভারি চার্জ</span>
               <span>৳{deliveryCharge}</span>
             </div>
+            {giftWrapCharge > 0 && (
+              <div className="flex justify-between text-pink-600 dark:text-pink-400 font-medium">
+                <span>উপহার র‍্যাপিং ও চিরকুট</span>
+                <span>৳{giftWrapCharge}</span>
+              </div>
+            )}
             <Separator />
             <div className="flex justify-between font-bold text-base">
               <span>সর্বমোট</span>

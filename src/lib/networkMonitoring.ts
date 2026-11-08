@@ -22,18 +22,27 @@ let reportTimer: ReturnType<typeof setInterval> | null = null;
 export const startNetworkMonitoring = () => {
   if (typeof window === 'undefined') return;
 
-  const originalFetch = window.fetch;
-
-  window.fetch = async function (...args: Parameters<typeof fetch>) {
-    const startTime = performance.now();
-    const request = args[0];
-    const url = typeof request === 'string' ? request : (request as Request).url;
-    const method = (args[1]?.method || 'GET').toUpperCase();
-
-    // Skip monitoring our own tracking calls
-    if (url.includes('/server-track') || url.includes('/v1/rest/')) {
-      return originalFetch.apply(this, args);
+  try {
+    const desc = Object.getOwnPropertyDescriptor(window, 'fetch');
+    if (desc && !desc.writable && !desc.set) {
+      // window.fetch has only a getter; do not attempt assignment
+      trackResourcePerformance();
+      return;
     }
+
+    const originalFetch = window.fetch;
+    if (typeof originalFetch !== 'function') return;
+
+    window.fetch = async function (...args: Parameters<typeof fetch>) {
+      const startTime = performance.now();
+      const request = args[0];
+      const url = typeof request === 'string' ? request : (request as Request).url;
+      const method = (args[1]?.method || 'GET').toUpperCase();
+
+      // Skip monitoring our own tracking calls
+      if (url.includes('/server-track') || url.includes('/v1/rest/')) {
+        return originalFetch.apply(this, args);
+      }
 
     try {
       const response = await originalFetch.apply(this, args);
@@ -86,6 +95,9 @@ export const startNetworkMonitoring = () => {
       throw error;
     }
   };
+  } catch {
+    // Gracefully ignore if window.fetch cannot be patched in this environment
+  }
 
   // Monitor connection quality changes
   const conn = (navigator as any).connection;

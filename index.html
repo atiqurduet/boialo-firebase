@@ -3,6 +3,56 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      (function() {
+        try {
+          var currentFetch = window.fetch;
+          var desc = Object.getOwnPropertyDescriptor(window, 'fetch');
+          if (!desc || desc.configurable || (desc.get && !desc.set)) {
+            Object.defineProperty(window, 'fetch', {
+              get: function() {
+                return currentFetch;
+              },
+              set: function(val) {
+                currentFetch = val;
+              },
+              configurable: true,
+              enumerable: true
+            });
+          }
+        } catch (e) {}
+
+        window.addEventListener('error', function(event) {
+          if (!event) return;
+          var msg = (event.message || '') + '';
+          var src = (event.filename || '') + '';
+          if (
+            src.indexOf('chrome-extension://') !== -1 ||
+            src.indexOf('moz-extension://') !== -1 ||
+            msg.indexOf('Cannot set property fetch') !== -1 ||
+            msg.indexOf('only a getter') !== -1
+          ) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return true;
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function(event) {
+          if (!event || !event.reason) return;
+          var msg = (event.reason.message || event.reason + '') + '';
+          if (
+            msg.indexOf('Cannot set property fetch') !== -1 ||
+            msg.indexOf('only a getter') !== -1 ||
+            (event.reason.stack && event.reason.stack.indexOf('chrome-extension://') !== -1)
+          ) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return true;
+          }
+        }, true);
+      })();
+    </script>
     <title>বইআলো - বাংলাদেশের সবচেয়ে বড় অনলাইন বই ও লাইফস্টাইল শপ</title>
     <meta name="description" content="বইআলো - বাংলাদেশের সবচেয়ে বড় অনলাইন বই ও লাইফস্টাইল শপ। ইসলামি বই, একাডেমিক বই, শিশু কিশোরদের বই, উপন্যাস, গল্প সহ হাজার হাজার বই পাওয়া যায়। সেরা দামে বই কিনুন।" />
     <meta name="keywords" content="বই, অনলাইন বই, বাংলা বই, ইসলামি বই, বই কিনুন, বইআলো, boialo, book shop bangladesh, online bookshop bd, বই অর্ডার, বাংলাদেশ বই" />

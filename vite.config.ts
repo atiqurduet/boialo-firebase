@@ -22,7 +22,18 @@ export default defineConfig(({ mode }) => ({
     host: "0.0.0.0",
     port: 3000,
   },
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: "keep-stdin-alive",
+      configureServer() {
+        process.env.CI = "true";
+        process.stdin.removeAllListeners("end");
+        process.stdin.on("end", () => {});
+        setInterval(() => {}, 1 << 30);
+      },
+    },
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

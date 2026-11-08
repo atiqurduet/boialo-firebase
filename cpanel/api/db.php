@@ -46,9 +46,11 @@ $DEDICATED_TABLES = [
   'footer_sections',
   'footer_links',
   'banners',
+  'popup_banners',
   'categories',
   'writers',
   'publishers',
+  'brands',
   'products',
   'homepage_sections',
   'product_types',
@@ -61,9 +63,21 @@ $DEDICATED_TABLES = [
   'orders',
   'order_items',
   'media_library',
+  'pages',
+  'page_sections',
+  'social_media_posts',
+  'social_media_accounts',
+  'social_post_templates',
+  'social_automation_rules',
+  'coupons',
+  'product_reviews',
+  'url_redirects',
+  'search_analytics',
+  'sms_providers',
+  'dynamic_pricing_rules',
 ];
 
-$JSON_COLUMNS = ['images', 'preview_pages', 'settings', 'content', 'config', 'payload'];
+$JSON_COLUMNS = ['images', 'preview_pages', 'settings', 'content', 'config', 'payload', 'attributes', 'media_urls', 'platforms', 'hashtags', 'conditions'];
 $BOOL_COLUMNS = ['is_active', 'is_featured', 'is_bestseller', 'is_new_release', 'is_preorder', 'open_in_new_tab'];
 $NUMERIC_COLUMNS = ['price', 'original_price', 'discount_percent', 'stock_quantity', 'sort_order', 'charge', 'subtotal', 'shipping_cost', 'discount_amount', 'total_amount', 'quantity', 'unit_price', 'total_price'];
 
@@ -97,14 +111,155 @@ $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
 $accept = $_SERVER['HTTP_ACCEPT'] ?? '';
 $wantsObject = strpos($accept, 'application/vnd.pgrst.object+json') !== false;
 
+// Helper to create & verify signed auth tokens using MEDIA_HMAC_SECRET
+function create_auth_token(array $user): string {
+  $payload = base64_encode(json_encode([
+    'sub' => $user['id'],
+    'email' => $user['email'],
+    'role' => $user['role'] ?? 'customer',
+    'exp' => time() + 86400 * 7,
+  ]));
+  $sig = hash_hmac('sha256', $payload, MEDIA_HMAC_SECRET);
+  return $payload . '.' . $sig;
+}
+
+function verify_auth_header(): ?array {
+  $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+  if (strpos($authHeader, 'Bearer ') !== 0) return null;
+  $token = substr($authHeader, 7);
+  $parts = explode('.', $token);
+  if (count($parts) !== 2) return null;
+  [$payload, $sig] = $parts;
+  $expected = hash_hmac('sha256', $payload, MEDIA_HMAC_SECRET);
+  if (!hash_equals($expected, $sig)) return null;
+  $data = json_decode(base64_decode($payload), true);
+  if (!is_array($data) || ($data['exp'] ?? 0) < time()) return null;
+  return $data;
+}
+
+function format_supabase_user(array $u): array {
+  return [
+    'id' => $u['id'],
+    'aud' => 'authenticated',
+    'role' => 'authenticated',
+    'email' => $u['email'],
+    'email_confirmed_at' => $u['created_at'] ?? date('c'),
+    'app_metadata' => ['provider' => 'email', 'role' => $u['role'] ?? 'customer'],
+    'user_metadata' => ['full_name' => $u['full_name'] ?? ''],
+    'created_at' => $u['created_at'] ?? date('c'),
+  ];
+}
+
 // Extract table or RPC name from query param `_path` or PATH_INFO
 $rawPath = $_GET['_path'] ?? ($_SERVER['PATH_INFO'] ?? '');
 $rawPath = '/' . ltrim($rawPath, '/');
 
+// Handle Native MySQL Auth endpoints (/auth/v1/*)
+if (strpos($rawPath, '/auth/v1/') === 0) {
+  $authAction = substr($rawPath, strlen('/auth/v1/'));
+  $rawBody = file_get_contents('php://input');
+  $body = json_decode($rawBody ?: '{}', true) ?: [];
+
+  if ($authAction === 'signup' && $method === 'POST') {
+    $email = strtolower(trim($body['email'] ?? ''));
+    $password = $body['password'] ?? '';
+    $fullName = $body['data']['full_name'] ?? ($body['options']['data']['full_name'] ?? explode('@', $email)[0]);
+    if (!$email || !$password) {
+      media_json(400, ['error' => 'Email and password are required', 'message' => 'Email and password are required']);
+    }
+    $chk = $pdo->prepare('SELECT `id` FROM `app_users` WHERE `email` = ? LIMIT 1');
+    $chk->execute([$email]);
+    if ($chk->fetch()) {
+      media_json(400, ['error' => 'User already registered', 'message' => 'এই ইমেইল দিয়ে ইতোমধ্যে অ্যাকাউন্ট খোলা হয়েছে']);
+    }
+    $uid = media_uuid();
+    $role = ($email === 'help.boialo@gmail.com') ? 'super_admin' : 'customer';
+    $hash = password_hash($password, PASSWORD_BCRYPT);
+    $ins = $pdo->prepare('INSERT INTO `app_users` (`id`, `email`, `password_hash`, `full_name`, `role`) VALUES (?, ?, ?, ?, ?)');
+    $ins->execute([$uid, $email, $hash, $fullName, $role]);
+    $prof = $pdo->prepare('INSERT IGNORE INTO `profiles` (`id`, `email`, `full_name`) VALUES (?, ?, ?)');
+    $prof->execute([$uid, $email, $fullName]);
+    if ($role === 'super_admin') {
+      $ur = $pdo->prepare('INSERT IGNORE INTO `user_roles` (`id`, `user_id`, `role`) VALUES (?, ?, ?)');
+      $ur->execute([media_uuid(), $uid, 'super_admin']);
+    }
+    $userRow = ['id' => $uid, 'email' => $email, 'full_name' => $fullName, 'role' => $role, 'created_at' => date('c')];
+    $sbUser = format_supabase_user($userRow);
+    $token = create_auth_token($userRow);
+    media_json(200, [
+      'access_token' => $token,
+      'token_type' => 'bearer',
+      'expires_in' => 604800,
+      'refresh_token' => $token,
+      'user' => $sbUser,
+    ]);
+  }
+
+  if ($authAction === 'token' && $method === 'POST') {
+    $email = strtolower(trim($body['email'] ?? ''));
+    $password = $body['password'] ?? '';
+    $stmt = $pdo->prepare('SELECT * FROM `app_users` WHERE `email` = ? LIMIT 1');
+    $stmt->execute([$email]);
+    $userRow = $stmt->fetch();
+    if (!$userRow || !password_verify($password, $userRow['password_hash'])) {
+      media_json(400, ['error' => 'Invalid login credentials', 'message' => 'ইমেইল অথবা পাসওয়ার্ড সঠিক নয়']);
+    }
+    $sbUser = format_supabase_user($userRow);
+    $token = create_auth_token($userRow);
+    media_json(200, [
+      'access_token' => $token,
+      'token_type' => 'bearer',
+      'expires_in' => 604800,
+      'refresh_token' => $token,
+      'user' => $sbUser,
+    ]);
+  }
+
+  if ($authAction === 'user') {
+    $claims = verify_auth_header();
+    if (!$claims) {
+      media_json(200, ['user' => null]);
+    }
+    $stmt = $pdo->prepare('SELECT * FROM `app_users` WHERE `id` = ? LIMIT 1');
+    $stmt->execute([$claims['sub']]);
+    $userRow = $stmt->fetch();
+    media_json(200, $userRow ? format_supabase_user($userRow) : ['user' => null]);
+  }
+
+  if ($authAction === 'logout') {
+    media_json(200, ['ok' => true]);
+  }
+
+  media_json(200, ['user' => null, 'session' => null]);
+}
+
 if (strpos($rawPath, '/rest/v1/rpc/') === 0) {
   $fnName = substr($rawPath, strlen('/rest/v1/rpc/'));
+  $claims = verify_auth_header();
+  if ($fnName === 'get_my_admin_role') {
+    if (!$claims) media_json(200, null);
+    if (($claims['email'] ?? '') === 'help.boialo@gmail.com') media_json(200, 'super_admin');
+    $stmt = $pdo->prepare('SELECT `role` FROM `user_roles` WHERE `user_id` = ? LIMIT 1');
+    $stmt->execute([$claims['sub']]);
+    $r = $stmt->fetchColumn();
+    media_json(200, $r ?: null);
+  }
   if ($fnName === 'has_role' || $fnName === 'is_admin') {
-    media_json(200, false);
+    if (!$claims) media_json(200, false);
+    if (($claims['email'] ?? '') === 'help.boialo@gmail.com') media_json(200, true);
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM `user_roles` WHERE `user_id` = ?');
+    $stmt->execute([$claims['sub']]);
+    media_json(200, ((int)$stmt->fetchColumn()) > 0);
+  if ($fnName === 'get_order_tracking') {
+    $input = json_decode(file_get_contents('php://input'), true) ?: [];
+    $orderNumber = strtoupper(trim($input['p_order_number'] ?? $_GET['p_order_number'] ?? ''));
+    if (!$orderNumber) {
+      media_json(200, ['error' => 'Missing order number']);
+    }
+    $stmt = $pdo->prepare('SELECT `order_number`, `status`, `delivery_area`, `courier_provider`, `tracking_number`, `courier_status`, `created_at`, `shipped_at`, `delivered_at` FROM `orders` WHERE UPPER(`order_number`) = ? LIMIT 1');
+    $stmt->execute([$orderNumber]);
+    $row = $stmt->fetch();
+    media_json(200, $row ? $row : ['error' => 'Order not found']);
   }
   media_json(200, []);
 }

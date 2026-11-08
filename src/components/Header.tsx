@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Heart, ShoppingBag, User, Menu, LogOut, Package, Search, ChevronDown, X } from "lucide-react";
+import { Heart, ShoppingBag, User, Menu, LogOut, Package, Search, ChevronDown, X, Gift, Sparkles } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 const fallbackNavLinks = [
   { name: "হোম", path: "/" },
   { name: "জেনারেল বই", path: "/shop" },
+  { name: "সিলেবাস বইসেট", path: "/syllabus" },
   { name: "একাডেমিক", path: "/categories/academic" },
   { name: "আরবি বই", path: "/categories/arabic" },
   { name: "লেখক", path: "/authors" },
@@ -210,6 +211,16 @@ export const Header = () => {
                         {wishlistCount > 0 && (
                           <span className="ml-auto text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{wishlistCount}</span>
                         )}
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/referral" className="cursor-pointer flex items-center gap-2 py-2 text-primary font-semibold">
+                        <Gift className="w-4 h-4 text-primary" /> রেফারাল ও ওয়ালেট
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/rewards" className="cursor-pointer flex items-center gap-2 py-2">
+                        <Sparkles className="w-4 h-4 text-amber-500" /> রিওয়ার্ডস ও স্পিন
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />

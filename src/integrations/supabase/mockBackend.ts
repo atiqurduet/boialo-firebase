@@ -333,6 +333,45 @@ const tables: Record<string, any[]> = {
       is_active: true,
     },
   ],
+  popup_banners: [
+    {
+      id: '66666666-6666-4666-8666-666666666601',
+      title: 'বইমেলা ও নববর্ষে বিশেষ উপহার অফার!',
+      description: 'যেকোনো ৩টি বই অর্ডারে পাচ্ছেন নিশ্চিত ফ্রি ডেলিভারি ও প্রিমিয়াম ক্যালিগ্রাফি বুকমার্ক।',
+      button_text: 'অফার দেখুন',
+      button_link: '/offers',
+      badge_text: 'সীমিত সময়ের অফার',
+      image_url: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800&auto=format&fit=crop&q=80',
+      background_color: '#ffffff',
+      text_color: '#1e293b',
+      overlay_color: 'rgba(0, 0, 0, 0.6)',
+      popup_type: 'modal',
+      position: 'center',
+      width: 520,
+      height: null,
+      border_radius: 20,
+      padding: 24,
+      text_align: 'center',
+      title_size: 'lg',
+      animation: 'fade',
+      trigger_type: 'delay',
+      trigger_delay: 3,
+      trigger_scroll_percent: 30,
+      show_frequency: 'once_per_session',
+      show_close_button: true,
+      close_on_overlay_click: true,
+      auto_close_seconds: null,
+      show_on_pages: ['/'],
+      exclude_pages: [],
+      show_to_logged_in: true,
+      show_to_guests: true,
+      device_target: 'all',
+      is_active: true,
+      sort_order: 1,
+      created_at: nowIso,
+      updated_at: nowIso,
+    },
+  ],
   categories: categoriesSeed,
   writers: writersSeed,
   publishers: publishersSeed,
@@ -370,6 +409,33 @@ const tables: Record<string, any[]> = {
   delivery_zones: [
     { id: 'zone-1', name_bn: 'ঢাকা সিটি', name_en: 'Inside Dhaka', charge: 60, estimated_days: '১-২ দিন', is_active: true, sort_order: 1 },
     { id: 'zone-2', name_bn: 'ঢাকার বাইরে', name_en: 'Outside Dhaka', charge: 110, estimated_days: '৩-৫ দিন', is_active: true, sort_order: 2 },
+  ],
+  loyalty_settings: [
+    { id: 'ls-1', setting_key: 'is_enabled', setting_value: { value: true } },
+    { id: 'ls-2', setting_key: 'points_per_taka', setting_value: { value: 0.02 } },
+    { id: 'ls-3', setting_key: 'points_value_taka', setting_value: { value: 1 } },
+    { id: 'ls-4', setting_key: 'min_redeem_points', setting_value: { value: 20 } },
+    { id: 'ls-5', setting_key: 'signup_bonus', setting_value: { value: 50 } },
+    { id: 'ls-6', setting_key: 'review_bonus', setting_value: { value: 10 } },
+    { id: 'ls-7', setting_key: 'referral_bonus', setting_value: { value: 50 } },
+    { id: 'ls-8', setting_key: 'referred_bonus', setting_value: { value: 50 } },
+    { id: 'ls-9', setting_key: 'free_delivery_points', setting_value: { value: 60 } },
+  ],
+  referral_settings: [
+    { id: 'rs-1', setting_key: 'is_enabled', setting_value: true },
+    { id: 'rs-2', setting_key: 'referrer_reward_amount', setting_value: 50 },
+    { id: 'rs-3', setting_key: 'referred_reward_amount', setting_value: 50 },
+    { id: 'rs-4', setting_key: 'free_delivery_points', setting_value: 60 },
+    { id: 'rs-5', setting_key: 'point_to_taka_rate', setting_value: 1 },
+    { id: 'rs-6', setting_key: 'min_order_amount', setting_value: 100 },
+  ],
+  referral_codes: [
+    { id: 'ref-c-1', user_id: 'help.boialo@gmail.com', code: 'BOIALO50', total_referrals: 12, total_earned: 600, is_active: true, created_at: nowIso },
+  ],
+  referral_rewards: [],
+  loyalty_points: [
+    { id: 'lp-1', user_id: 'help.boialo@gmail.com', points: 50, type: 'earned', source: 'signup_bonus', description: 'সাইনআপ বোনাস পয়েন্ট', created_at: nowIso },
+    { id: 'lp-2', user_id: 'help.boialo@gmail.com', points: 50, type: 'earned', source: 'referral_bonus', description: 'বন্ধুকে রেফার করার জন্য বোনাস পয়েন্ট', created_at: nowIso },
   ],
 };
 
@@ -440,6 +506,7 @@ const CATALOG_COLLECTIONS = new Set([
   'footer_sections',
   'footer_links',
   'banners',
+  'popup_banners',
   'categories',
   'writers',
   'publishers',
@@ -451,6 +518,18 @@ const CATALOG_COLLECTIONS = new Set([
   'payment_methods',
   'courier_providers',
   'delivery_zones',
+  'pages',
+  'page_sections',
+  'social_media_posts',
+  'coupons',
+  'product_reviews',
+  'url_redirects',
+  'search_analytics',
+  'loyalty_settings',
+  'referral_settings',
+  'referral_codes',
+  'referral_rewards',
+  'loyalty_points',
 ]);
 
 async function ensureFirestoreCollectionSynced(tableName: string): Promise<void> {
@@ -482,8 +561,45 @@ export async function handleMockSupabaseRequest(input: RequestInfo | URL, init?:
   const accept = getHeader(headers, 'accept');
   const wantsObject = accept.includes('application/vnd.pgrst.object+json');
 
-  // 1. Auth endpoints
+  // 1. Auth endpoints (/auth/v1/signup, /auth/v1/token, /auth/v1/user, /auth/v1/logout)
   if (url.pathname.startsWith('/auth/v1/')) {
+    const authAction = url.pathname.replace('/auth/v1/', '');
+    if ((authAction === 'signup' || authAction === 'token') && method === 'POST') {
+      try {
+        const bodyText = typeof init?.body === 'string' ? init.body : '{}';
+        const parsed = JSON.parse(bodyText || '{}');
+        const email = String(parsed.email || 'user@boialo.com').toLowerCase().trim();
+        const fullName = parsed?.data?.full_name || parsed?.options?.data?.full_name || email.split('@')[0];
+        const uid = 'user-' + btoa(email).replace(/[^a-zA-Z0-9]/g, '').slice(0, 20);
+        const role = email === 'help.boialo@gmail.com' ? 'super_admin' : 'customer';
+        const sbUser = {
+          id: uid,
+          aud: 'authenticated',
+          role: 'authenticated',
+          email,
+          email_confirmed_at: nowIso,
+          app_metadata: { provider: 'email', role },
+          user_metadata: { full_name: fullName },
+          created_at: nowIso,
+        };
+        const token = btoa(JSON.stringify({ sub: uid, email, role }));
+        return new Response(
+          JSON.stringify({
+            access_token: token,
+            token_type: 'bearer',
+            expires_in: 604800,
+            refresh_token: token,
+            user: sbUser,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      } catch {
+        return new Response(JSON.stringify({ user: null, session: null }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    }
     return new Response(JSON.stringify({ user: null, session: null }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -492,6 +608,21 @@ export async function handleMockSupabaseRequest(input: RequestInfo | URL, init?:
 
   // 2. Edge Functions endpoints
   if (url.pathname.startsWith('/functions/v1/')) {
+    if (url.pathname.includes('/search')) {
+      return new Response(
+        JSON.stringify({
+          products: [],
+          categories: [],
+          suggestions: [],
+          autocomplete: [],
+          totalProducts: 0,
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
     return new Response(JSON.stringify({ success: true, ok: true, results: [], data: null }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -509,9 +640,36 @@ export async function handleMockSupabaseRequest(input: RequestInfo | URL, init?:
   // 4. RPC endpoints
   if (url.pathname.startsWith('/rest/v1/rpc/')) {
     const fnName = url.pathname.replace('/rest/v1/rpc/', '');
-    let result: any = null;
-    if (fnName === 'has_role' || fnName === 'is_admin') {
-      result = false;
+    if (fnName === 'get_my_admin_role') {
+      result = 'super_admin';
+    } else if (fnName === 'has_role' || fnName === 'is_admin') {
+      result = true;
+    } else if (fnName === 'get_order_tracking') {
+      try {
+        const body = typeof init?.body === 'string' ? JSON.parse(init.body) : {};
+        const orderNum = (body?.p_order_number || url.searchParams.get('p_order_number') || '').toUpperCase().trim();
+        await ensureFirestoreCollectionSynced('orders');
+        const matched = (tables['orders'] || []).find(
+          (o: any) => (o.order_number || '').toUpperCase() === orderNum
+        );
+        if (matched) {
+          result = {
+            order_number: matched.order_number,
+            status: matched.status || 'processing',
+            delivery_area: matched.delivery_area || 'ঢাকার ভিতরে',
+            courier_provider: matched.courier_provider || null,
+            tracking_number: matched.tracking_number || null,
+            courier_status: matched.courier_status || null,
+            created_at: matched.created_at,
+            shipped_at: matched.shipped_at || null,
+            delivered_at: matched.delivered_at || null,
+          };
+        } else {
+          result = { error: 'Order not found' };
+        }
+      } catch {
+        result = { error: 'Order not found' };
+      }
     } else if (fnName.startsWith('get_') || fnName.startsWith('search_')) {
       result = [];
     }

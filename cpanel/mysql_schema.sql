@@ -86,6 +86,48 @@ CREATE TABLE IF NOT EXISTS `banners` (
   `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 6.1. popup_banners (Promotional Popup & Floating Modal Banners)
+CREATE TABLE IF NOT EXISTS `popup_banners` (
+  `id` VARCHAR(64) NOT NULL PRIMARY KEY,
+  `title` VARCHAR(255) NOT NULL,
+  `description` TEXT DEFAULT NULL,
+  `button_text` VARCHAR(128) DEFAULT NULL,
+  `button_link` VARCHAR(500) DEFAULT NULL,
+  `badge_text` VARCHAR(128) DEFAULT NULL,
+  `image_url` VARCHAR(1000) DEFAULT NULL,
+  `background_color` VARCHAR(64) DEFAULT NULL,
+  `text_color` VARCHAR(64) DEFAULT NULL,
+  `overlay_color` VARCHAR(64) DEFAULT NULL,
+  `popup_type` VARCHAR(64) NOT NULL DEFAULT 'modal',
+  `position` VARCHAR(64) DEFAULT 'center',
+  `width` INT DEFAULT NULL,
+  `height` INT DEFAULT NULL,
+  `border_radius` INT DEFAULT NULL,
+  `padding` INT DEFAULT NULL,
+  `text_align` VARCHAR(32) DEFAULT NULL,
+  `title_size` VARCHAR(32) DEFAULT NULL,
+  `animation` VARCHAR(64) DEFAULT NULL,
+  `trigger_type` VARCHAR(64) DEFAULT 'delay',
+  `trigger_delay` INT DEFAULT 3,
+  `trigger_scroll_percent` INT DEFAULT 30,
+  `show_frequency` VARCHAR(64) DEFAULT 'always',
+  `show_close_button` TINYINT(1) DEFAULT 1,
+  `close_on_overlay_click` TINYINT(1) DEFAULT 1,
+  `auto_close_seconds` INT DEFAULT NULL,
+  `show_on_pages` JSON DEFAULT NULL,
+  `exclude_pages` JSON DEFAULT NULL,
+  `show_to_logged_in` TINYINT(1) DEFAULT 1,
+  `show_to_guests` TINYINT(1) DEFAULT 1,
+  `device_target` VARCHAR(64) DEFAULT 'all',
+  `start_date` DATETIME DEFAULT NULL,
+  `end_date` DATETIME DEFAULT NULL,
+  `is_active` TINYINT(1) DEFAULT 1,
+  `sort_order` INT DEFAULT 0,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX `idx_popup_banners_active` (`is_active`, `sort_order`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- 7. categories
 CREATE TABLE IF NOT EXISTS `categories` (
   `id` VARCHAR(64) NOT NULL PRIMARY KEY,
@@ -155,7 +197,13 @@ CREATE TABLE IF NOT EXISTS `products` (
   `isbn` VARCHAR(64) DEFAULT NULL,
   `pages` INT DEFAULT NULL,
   `edition` VARCHAR(128) DEFAULT NULL,
+  `binding` VARCHAR(128) DEFAULT 'হার্ডকভার',
   `language` VARCHAR(64) DEFAULT 'বাংলা',
+  `attributes` JSON DEFAULT NULL,
+  `brand_id` VARCHAR(64) DEFAULT NULL,
+  `translator_id` VARCHAR(64) DEFAULT NULL,
+  `secondary_writer_ids` JSON DEFAULT NULL,
+  `preview_url` VARCHAR(1000) DEFAULT NULL,
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX `idx_products_category` (`category_id`),
@@ -278,19 +326,33 @@ CREATE TABLE IF NOT EXISTS `orders` (
   `id` VARCHAR(64) NOT NULL PRIMARY KEY,
   `order_number` VARCHAR(64) NOT NULL UNIQUE,
   `user_id` VARCHAR(64) DEFAULT NULL,
-  `customer_name` VARCHAR(255) NOT NULL,
-  `customer_phone` VARCHAR(64) NOT NULL,
+  `full_name` VARCHAR(255) DEFAULT '',
+  `customer_name` VARCHAR(255) DEFAULT '',
+  `phone` VARCHAR(64) DEFAULT '',
+  `customer_phone` VARCHAR(64) DEFAULT '',
+  `email` VARCHAR(255) DEFAULT NULL,
   `customer_email` VARCHAR(255) DEFAULT NULL,
-  `shipping_address` TEXT NOT NULL,
+  `address` TEXT DEFAULT NULL,
+  `shipping_address` TEXT DEFAULT NULL,
   `city` VARCHAR(128) DEFAULT NULL,
   `area` VARCHAR(128) DEFAULT NULL,
+  `delivery_area` VARCHAR(128) DEFAULT 'ঢাকার ভিতরে',
   `subtotal` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-  `shipping_cost` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `delivery_charge` DECIMAL(10,2) NOT NULL DEFAULT 60.00,
+  `shipping_cost` DECIMAL(10,2) NOT NULL DEFAULT 60.00,
   `discount_amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `total` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `total_amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `payment_method` VARCHAR(64) DEFAULT 'cod',
+  `transaction_id` VARCHAR(128) DEFAULT NULL,
   `payment_status` VARCHAR(64) DEFAULT 'pending',
   `status` VARCHAR(64) DEFAULT 'pending',
+  `courier_provider` VARCHAR(64) DEFAULT NULL,
+  `tracking_number` VARCHAR(128) DEFAULT NULL,
+  `courier_status` VARCHAR(64) DEFAULT NULL,
+  `shipped_at` DATETIME DEFAULT NULL,
+  `delivered_at` DATETIME DEFAULT NULL,
+  `phone_verified` BOOLEAN DEFAULT FALSE,
   `notes` TEXT DEFAULT NULL,
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -304,7 +366,9 @@ CREATE TABLE IF NOT EXISTS `order_items` (
   `order_id` VARCHAR(64) NOT NULL,
   `product_id` VARCHAR(64) DEFAULT NULL,
   `product_title` VARCHAR(500) NOT NULL,
+  `product_image` VARCHAR(1000) DEFAULT NULL,
   `quantity` INT NOT NULL DEFAULT 1,
+  `price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `unit_price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `total_price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -328,7 +392,27 @@ CREATE TABLE IF NOT EXISTS `media_library` (
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 22. Generic JSON store for auxiliary tables (coupons, offers, reviews, blog_posts, etc.)
+-- 22. app_users (Native cPanel MySQL authentication table)
+CREATE TABLE IF NOT EXISTS `app_users` (
+  `id` VARCHAR(64) NOT NULL PRIMARY KEY,
+  `email` VARCHAR(191) NOT NULL UNIQUE,
+  `password_hash` VARCHAR(255) NOT NULL,
+  `full_name` VARCHAR(255) DEFAULT NULL,
+  `role` VARCHAR(64) NOT NULL DEFAULT 'customer',
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 23. user_roles (Role permissions mapping)
+CREATE TABLE IF NOT EXISTS `user_roles` (
+  `id` VARCHAR(64) NOT NULL PRIMARY KEY,
+  `user_id` VARCHAR(64) NOT NULL,
+  `role` VARCHAR(64) NOT NULL DEFAULT 'admin',
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_user_roles_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 24. Generic JSON store for auxiliary tables (coupons, offers, reviews, blog_posts, etc.)
 CREATE TABLE IF NOT EXISTS `app_collections` (
   `collection_name` VARCHAR(128) NOT NULL,
   `id` VARCHAR(64) NOT NULL,
@@ -336,6 +420,171 @@ CREATE TABLE IF NOT EXISTS `app_collections` (
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`collection_name`, `id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 25. pages (Custom landing pages and campaign builder)
+CREATE TABLE IF NOT EXISTS `pages` (
+  `id` VARCHAR(64) NOT NULL PRIMARY KEY,
+  `title_bn` VARCHAR(255) NOT NULL,
+  `title_en` VARCHAR(255) DEFAULT NULL,
+  `slug` VARCHAR(255) NOT NULL UNIQUE,
+  `description_bn` TEXT DEFAULT NULL,
+  `description_en` TEXT DEFAULT NULL,
+  `meta_title` VARCHAR(255) DEFAULT NULL,
+  `meta_description` TEXT DEFAULT NULL,
+  `featured_image` VARCHAR(1000) DEFAULT NULL,
+  `status` VARCHAR(64) NOT NULL DEFAULT 'published',
+  `is_homepage` BOOLEAN DEFAULT FALSE,
+  `page_type` VARCHAR(64) DEFAULT 'general',
+  `is_private` BOOLEAN DEFAULT FALSE,
+  `access_code` VARCHAR(64) DEFAULT NULL,
+  `max_usage` INT DEFAULT NULL,
+  `usage_per_user` INT DEFAULT 1,
+  `start_date` DATETIME DEFAULT NULL,
+  `end_date` DATETIME DEFAULT NULL,
+  `linked_offer_id` VARCHAR(64) DEFAULT NULL,
+  `linked_coupon_id` VARCHAR(64) DEFAULT NULL,
+  `selected_product_ids` JSON DEFAULT NULL,
+  `selected_category_ids` JSON DEFAULT NULL,
+  `show_in_offers_page` BOOLEAN DEFAULT FALSE,
+  `sort_order` INT NOT NULL DEFAULT 0,
+  `created_by` VARCHAR(64) DEFAULT NULL,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX `idx_pages_slug` (`slug`),
+  INDEX `idx_pages_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 26. page_sections (Modular blocks for pages)
+CREATE TABLE IF NOT EXISTS `page_sections` (
+  `id` VARCHAR(64) NOT NULL PRIMARY KEY,
+  `page_id` VARCHAR(64) NOT NULL,
+  `section_type` VARCHAR(64) NOT NULL,
+  `title_bn` VARCHAR(255) DEFAULT NULL,
+  `title_en` VARCHAR(255) DEFAULT NULL,
+  `subtitle_bn` VARCHAR(255) DEFAULT NULL,
+  `subtitle_en` VARCHAR(255) DEFAULT NULL,
+  `content` JSON NOT NULL,
+  `settings` JSON DEFAULT NULL,
+  `sort_order` INT NOT NULL DEFAULT 0,
+  `is_active` BOOLEAN DEFAULT TRUE,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX `idx_page_sections_page` (`page_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 27. social_media_posts (Multi-platform social media posts)
+CREATE TABLE IF NOT EXISTS `social_media_posts` (
+  `id` VARCHAR(64) NOT NULL PRIMARY KEY,
+  `title` VARCHAR(255) DEFAULT NULL,
+  `content` TEXT NOT NULL,
+  `media_urls` JSON DEFAULT NULL,
+  `platforms` JSON DEFAULT NULL,
+  `status` VARCHAR(64) NOT NULL DEFAULT 'draft',
+  `scheduled_at` DATETIME DEFAULT NULL,
+  `published_at` DATETIME DEFAULT NULL,
+  `created_by` VARCHAR(64) DEFAULT NULL,
+  `campaign_name` VARCHAR(255) DEFAULT NULL,
+  `hashtags` JSON DEFAULT NULL,
+  `product_id` VARCHAR(64) DEFAULT NULL,
+  `offer_id` VARCHAR(64) DEFAULT NULL,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX `idx_social_posts_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 28. social_media_accounts (Connected social profiles)
+CREATE TABLE IF NOT EXISTS `social_media_accounts` (
+  `id` VARCHAR(64) NOT NULL PRIMARY KEY,
+  `platform` VARCHAR(64) NOT NULL,
+  `account_name` VARCHAR(255) NOT NULL,
+  `account_id` VARCHAR(255) DEFAULT NULL,
+  `access_token` TEXT DEFAULT NULL,
+  `refresh_token` TEXT DEFAULT NULL,
+  `expires_at` DATETIME DEFAULT NULL,
+  `is_active` BOOLEAN DEFAULT TRUE,
+  `settings` JSON DEFAULT NULL,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_social_accounts_platform` (`platform`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 29. social_post_templates (Automated post templates)
+CREATE TABLE IF NOT EXISTS `social_post_templates` (
+  `id` VARCHAR(64) NOT NULL PRIMARY KEY,
+  `name` VARCHAR(255) NOT NULL,
+  `template_type` VARCHAR(64) NOT NULL DEFAULT 'general',
+  `content_template` TEXT NOT NULL,
+  `platforms` JSON DEFAULT NULL,
+  `hashtags` JSON DEFAULT NULL,
+  `is_active` BOOLEAN DEFAULT TRUE,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 30. social_automation_rules (Auto-post on trigger)
+CREATE TABLE IF NOT EXISTS `social_automation_rules` (
+  `id` VARCHAR(64) NOT NULL PRIMARY KEY,
+  `name` VARCHAR(255) NOT NULL,
+  `trigger_type` VARCHAR(64) NOT NULL,
+  `template_id` VARCHAR(64) DEFAULT NULL,
+  `platforms` JSON DEFAULT NULL,
+  `delay_minutes` INT DEFAULT 0,
+  `auto_publish` BOOLEAN DEFAULT FALSE,
+  `is_active` BOOLEAN DEFAULT TRUE,
+  `conditions` JSON DEFAULT NULL,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 31. coupons & discounts
+CREATE TABLE IF NOT EXISTS `coupons` (
+  `id` VARCHAR(64) NOT NULL PRIMARY KEY,
+  `code` VARCHAR(64) NOT NULL UNIQUE,
+  `discount_type` VARCHAR(32) NOT NULL DEFAULT 'percentage',
+  `discount_value` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `min_spend` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `max_discount` DECIMAL(10,2) DEFAULT NULL,
+  `usage_limit` INT DEFAULT NULL,
+  `usage_count` INT NOT NULL DEFAULT 0,
+  `is_active` BOOLEAN DEFAULT TRUE,
+  `start_date` DATETIME DEFAULT NULL,
+  `end_date` DATETIME DEFAULT NULL,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_coupons_code` (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 32. product_reviews
+CREATE TABLE IF NOT EXISTS `product_reviews` (
+  `id` VARCHAR(64) NOT NULL PRIMARY KEY,
+  `product_id` VARCHAR(64) NOT NULL,
+  `user_id` VARCHAR(64) DEFAULT NULL,
+  `customer_name` VARCHAR(255) NOT NULL,
+  `rating` INT NOT NULL DEFAULT 5,
+  `comment` TEXT DEFAULT NULL,
+  `is_verified_purchase` BOOLEAN DEFAULT FALSE,
+  `is_approved` BOOLEAN DEFAULT TRUE,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_reviews_product` (`product_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 33. url_redirects (SEO 301/302 Redirects)
+CREATE TABLE IF NOT EXISTS `url_redirects` (
+  `id` VARCHAR(64) NOT NULL PRIMARY KEY,
+  `source_path` VARCHAR(500) NOT NULL,
+  `target_path` VARCHAR(500) NOT NULL,
+  `redirect_type` INT NOT NULL DEFAULT 301,
+  `is_active` BOOLEAN DEFAULT TRUE,
+  `hits` INT NOT NULL DEFAULT 0,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 34. search_analytics (Customer search terms & trends)
+CREATE TABLE IF NOT EXISTS `search_analytics` (
+  `id` VARCHAR(64) NOT NULL PRIMARY KEY,
+  `query` VARCHAR(255) NOT NULL,
+  `results_count` INT NOT NULL DEFAULT 0,
+  `user_id` VARCHAR(64) DEFAULT NULL,
+  `ip_address` VARCHAR(64) DEFAULT NULL,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_search_query` (`query`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
@@ -454,5 +703,83 @@ INSERT IGNORE INTO `courier_providers` (`id`, `name_bn`, `name_en`, `provider`, 
 INSERT IGNORE INTO `delivery_zones` (`id`, `name_bn`, `name_en`, `charge`, `estimated_days`, `is_active`, `sort_order`) VALUES
 ('zone-1', 'ঢাকা সিটি', 'Inside Dhaka', 60.00, '১-২ দিন', 1, 1),
 ('zone-2', 'ঢাকার বাইরে', 'Outside Dhaka', 110.00, '৩-৫ দিন', 1, 2);
+
+-- 35. LOYALTY SETTINGS
+CREATE TABLE IF NOT EXISTS `loyalty_settings` (
+  `id` VARCHAR(64) NOT NULL PRIMARY KEY,
+  `setting_key` VARCHAR(100) NOT NULL UNIQUE,
+  `setting_value` JSON NOT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 36. LOYALTY POINTS
+CREATE TABLE IF NOT EXISTS `loyalty_points` (
+  `id` VARCHAR(64) NOT NULL PRIMARY KEY,
+  `user_id` VARCHAR(64) NOT NULL,
+  `points` INT NOT NULL,
+  `type` ENUM('earned', 'redeemed', 'expired') NOT NULL DEFAULT 'earned',
+  `source` VARCHAR(100) NOT NULL,
+  `description` TEXT NULL,
+  `reference_id` VARCHAR(100) NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_lp_user_id` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 37. REFERRAL SETTINGS
+CREATE TABLE IF NOT EXISTS `referral_settings` (
+  `id` VARCHAR(64) NOT NULL PRIMARY KEY,
+  `setting_key` VARCHAR(100) NOT NULL UNIQUE,
+  `setting_value` JSON NOT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 38. REFERRAL CODES
+CREATE TABLE IF NOT EXISTS `referral_codes` (
+  `id` VARCHAR(64) NOT NULL PRIMARY KEY,
+  `user_id` VARCHAR(64) NOT NULL,
+  `code` VARCHAR(50) NOT NULL UNIQUE,
+  `total_referrals` INT DEFAULT 0,
+  `total_earned` DECIMAL(10,2) DEFAULT 0.00,
+  `is_active` TINYINT(1) DEFAULT 1,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX `idx_rc_user_id` (`user_id`),
+  INDEX `idx_rc_code` (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 39. REFERRAL REWARDS
+CREATE TABLE IF NOT EXISTS `referral_rewards` (
+  `id` VARCHAR(64) NOT NULL PRIMARY KEY,
+  `referral_code_id` VARCHAR(64) NOT NULL,
+  `referrer_id` VARCHAR(64) NULL,
+  `referred_id` VARCHAR(64) NOT NULL,
+  `reward_amount` DECIMAL(10,2) NOT NULL DEFAULT 50.00,
+  `status` VARCHAR(50) DEFAULT 'completed',
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_rr_code_id` (`referral_code_id`),
+  INDEX `idx_rr_referred_id` (`referred_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Seed default settings for loyalty & referral
+INSERT IGNORE INTO `loyalty_settings` (`id`, `setting_key`, `setting_value`) VALUES
+('ls-1', 'is_enabled', '{"value": true}'),
+('ls-2', 'points_per_taka', '{"value": 0.02}'),
+('ls-3', 'points_value_taka', '{"value": 1}'),
+('ls-4', 'min_redeem_points', '{"value": 20}'),
+('ls-5', 'signup_bonus', '{"value": 50}'),
+('ls-6', 'review_bonus', '{"value": 10}'),
+('ls-7', 'referral_bonus', '{"value": 50}'),
+('ls-8', 'referred_bonus', '{"value": 50}'),
+('ls-9', 'free_delivery_points', '{"value": 60}');
+
+INSERT IGNORE INTO `referral_settings` (`id`, `setting_key`, `setting_value`) VALUES
+('rs-1', 'is_enabled', 'true'),
+('rs-2', 'referrer_reward_amount', '50'),
+('rs-3', 'referred_reward_amount', '50'),
+('rs-4', 'free_delivery_points', '60'),
+('rs-5', 'point_to_taka_rate', '1'),
+('rs-6', 'min_order_amount', '100');
 
 SET FOREIGN_KEY_CHECKS = 1;

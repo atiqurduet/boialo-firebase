@@ -35,10 +35,12 @@ const AdminReferralProgram = () => {
   const [formData, setFormData] = useState<Record<string, any>>({});
 
   // Initialize form when settings load
-  const isEnabled = formData.is_enabled ?? getSetting("is_enabled", false);
+  const isEnabled = formData.is_enabled ?? getSetting("is_enabled", true);
   const referrerReward = formData.referrer_reward_amount ?? getSetting("referrer_reward_amount", 50);
-  const referredReward = formData.referred_reward_amount ?? getSetting("referred_reward_amount", 30);
-  const minOrder = formData.min_order_amount ?? getSetting("min_order_amount", 200);
+  const referredReward = formData.referred_reward_amount ?? getSetting("referred_reward_amount", 50);
+  const freeDeliveryPoints = formData.free_delivery_points ?? getSetting("free_delivery_points", 60);
+  const pointToTakaRate = formData.point_to_taka_rate ?? getSetting("point_to_taka_rate", 1);
+  const minOrder = formData.min_order_amount ?? getSetting("min_order_amount", 100);
 
   // Fetch referral stats
   const { data: referralCodes = [] } = useQuery({
@@ -76,15 +78,27 @@ const AdminReferralProgram = () => {
         { setting_key: "is_enabled", setting_value: isEnabled },
         { setting_key: "referrer_reward_amount", setting_value: referrerReward },
         { setting_key: "referred_reward_amount", setting_value: referredReward },
+        { setting_key: "free_delivery_points", setting_value: freeDeliveryPoints },
+        { setting_key: "point_to_taka_rate", setting_value: pointToTakaRate },
         { setting_key: "min_order_amount", setting_value: minOrder },
       ];
 
       for (const u of updates) {
+        // Also sync with loyalty_settings if key exists
+        await supabase
+          .from("loyalty_settings")
+          .update({ setting_value: { value: u.setting_value }, updated_at: new Date().toISOString() })
+          .eq("setting_key", u.setting_key)
+          .catch(() => {});
+
         const { error } = await supabase
           .from("referral_settings")
           .update({ setting_value: u.setting_value, updated_at: new Date().toISOString() })
           .eq("setting_key", u.setting_key);
-        if (error) throw error;
+        if (error) {
+          // If not existing, insert
+          await supabase.from("referral_settings").insert(u).catch(() => {});
+        }
       }
     },
     onSuccess: () => {
@@ -166,22 +180,43 @@ const AdminReferralProgram = () => {
               />
               <Label>রেফারাল প্রোগ্রাম সক্রিয়</Label>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
               <div>
-                <Label>রেফারারের রিওয়ার্ড (৳)</Label>
+                <Label>রেফারারের পয়েন্ট বোনাস</Label>
                 <Input
                   type="number"
                   value={referrerReward}
                   onChange={(e) => setFormData({ ...formData, referrer_reward_amount: Number(e.target.value) })}
                 />
+                <p className="text-[10px] text-muted-foreground mt-1">ডিফল্ট: ৫০ পয়েন্ট</p>
               </div>
               <div>
-                <Label>রেফার্ডের রিওয়ার্ড (৳)</Label>
+                <Label>রেফার্ড বন্ধুর পয়েন্ট বোনাস</Label>
                 <Input
                   type="number"
                   value={referredReward}
                   onChange={(e) => setFormData({ ...formData, referred_reward_amount: Number(e.target.value) })}
                 />
+                <p className="text-[10px] text-muted-foreground mt-1">ডিফল্ট: ৫০ পয়েন্ট</p>
+              </div>
+              <div>
+                <Label>ফ্রি ডেলিভারি পয়েন্ট থ্রেশহোল্ড</Label>
+                <Input
+                  type="number"
+                  value={freeDeliveryPoints}
+                  onChange={(e) => setFormData({ ...formData, free_delivery_points: Number(e.target.value) })}
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">ডিফল্ট: ৬০ পয়েন্টে ফ্রি ডেলিভারি</p>
+              </div>
+              <div>
+                <Label>১ পয়েন্টের মূল্য (৳)</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={pointToTakaRate}
+                  onChange={(e) => setFormData({ ...formData, point_to_taka_rate: Number(e.target.value) })}
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">১ পয়েন্ট = ১ টাকা</p>
               </div>
               <div>
                 <Label>ন্যূনতম অর্ডার পরিমাণ (৳)</Label>
@@ -190,6 +225,7 @@ const AdminReferralProgram = () => {
                   value={minOrder}
                   onChange={(e) => setFormData({ ...formData, min_order_amount: Number(e.target.value) })}
                 />
+                <p className="text-[10px] text-muted-foreground mt-1">ডিফল্ট: ১০০৳</p>
               </div>
             </div>
             <Button onClick={() => saveSettings.mutate()} disabled={saveSettings.isPending}>

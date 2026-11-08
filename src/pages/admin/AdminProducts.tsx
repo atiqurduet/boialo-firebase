@@ -126,6 +126,12 @@ const AdminProducts = () => {
     isbn: '',
     preview_url: '',
     release_date: null as Date | null,
+    // Custom Attributes & Specifications
+    edition: '',
+    pages: '' as string | number,
+    binding: 'হার্ডকভার',
+    language: 'বাংলা',
+    customAttributes: [] as { key: string; value: string }[],
   });
 
   useEffect(() => {
@@ -255,6 +261,16 @@ const AdminProducts = () => {
         isbn: formData.isbn || null,
         preview_url: formData.preview_url || null,
         release_date: formData.release_date ? format(formData.release_date, 'yyyy-MM-dd') : null,
+        pages: formData.pages ? Number(formData.pages) : null,
+        edition: formData.edition || null,
+        binding: formData.binding || null,
+        language: formData.language || 'বাংলা',
+        attributes: formData.customAttributes.reduce((acc, item) => {
+          if (item.key.trim() && item.value.trim()) {
+            acc[item.key.trim()] = item.value.trim();
+          }
+          return acc;
+        }, {} as Record<string, string>),
       };
 
       if (editingProduct) {
@@ -311,6 +327,14 @@ const AdminProducts = () => {
       isbn: product.isbn || '',
       preview_url: (product as any).preview_url || '',
       release_date: product.release_date ? new Date(product.release_date) : null,
+      edition: (product as any).edition || '',
+      pages: (product as any).pages || '',
+      binding: (product as any).binding || 'হার্ডকভার',
+      language: (product as any).language || 'বাংলা',
+      customAttributes: Object.entries((product as any).attributes || {}).map(([key, value]) => ({
+        key,
+        value: String(value),
+      })),
     });
     setDialogOpen(true);
   };
@@ -356,6 +380,11 @@ const AdminProducts = () => {
       isbn: '',
       preview_url: '',
       release_date: null,
+      edition: '',
+      pages: '',
+      binding: 'হার্ডকভার',
+      language: 'বাংলা',
+      customAttributes: [],
     });
     setTagInput('');
   };
@@ -403,10 +432,11 @@ const AdminProducts = () => {
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <Tabs defaultValue="basic">
-                  <TabsList className="grid w-full grid-cols-4">
+                  <TabsList className="grid w-full grid-cols-5">
                     <TabsTrigger value="basic">মূল তথ্য</TabsTrigger>
                     <TabsTrigger value="pricing">মূল্য ও স্টক</TabsTrigger>
                     <TabsTrigger value="relations">সম্পর্ক</TabsTrigger>
+                    <TabsTrigger value="attributes">বৈশিষ্ট্য ও স্পেকস</TabsTrigger>
                     <TabsTrigger value="seo">SEO</TabsTrigger>
                   </TabsList>
 
@@ -642,6 +672,128 @@ const AdminProducts = () => {
                           ))}
                         </SelectContent>
                       </Select>
+                    </div>
+                  </TabsContent>
+
+                  {/* Attributes & Specs Tab */}
+                  <TabsContent value="attributes" className="space-y-4 mt-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label>সংস্করণ (Edition)</Label>
+                        <Input
+                          value={formData.edition}
+                          onChange={(e) => setFormData({ ...formData, edition: e.target.value })}
+                          placeholder="যেমন: ১ম প্রকাশ, ২০২৬ সংস্করণ"
+                        />
+                      </div>
+                      <div>
+                        <Label>পৃষ্ঠা সংখ্যা (Pages)</Label>
+                        <Input
+                          type="number"
+                          value={formData.pages}
+                          onChange={(e) => setFormData({ ...formData, pages: e.target.value })}
+                          placeholder="যেমন: ২৫৬"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label>বাঁধাই (Binding)</Label>
+                        <Select
+                          value={formData.binding || "হার্ডকভার"}
+                          onValueChange={(val) => setFormData({ ...formData, binding: val })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="বাঁধাই নির্বাচন করুন" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="হার্ডকভার">হার্ডকভার</SelectItem>
+                            <SelectItem value="পেপারব্যাক">পেপারব্যাক</SelectItem>
+                            <SelectItem value="বোর্ড বাঁধাই">বোর্ড বাঁধাই</SelectItem>
+                            <SelectItem value="লেদার বাঁধাই">লেদার বাঁধাই</SelectItem>
+                            <SelectItem value="অন্যান্য">অন্যান্য</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>ভাষা (Language)</Label>
+                        <Input
+                          value={formData.language}
+                          onChange={(e) => setFormData({ ...formData, language: e.target.value })}
+                          placeholder="যেমন: বাংলা / ইংরেজি / আরবি"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Dynamic Custom Attributes */}
+                    <div className="pt-2 border-t border-border space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label className="text-sm font-semibold">অতিরিক্ত কাস্টম বৈশিষ্ট্য (Custom Attributes)</Label>
+                          <p className="text-xs text-muted-foreground">বই বা যেকোনো পণ্যের জন্য নিজস্ব যেকোনো বৈশিষ্ট্য যোগ করুন (যেমন: কাগজের ধরন, অনুবাদক, ওজন, সাইজ ইত্যাদি)</p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setFormData({
+                              ...formData,
+                              customAttributes: [...formData.customAttributes, { key: '', value: '' }],
+                            })
+                          }
+                        >
+                          <Plus className="h-3.5 w-3.5 mr-1" /> বৈশিষ্ট্য যোগ করুন
+                        </Button>
+                      </div>
+
+                      <div className="space-y-2">
+                        {formData.customAttributes.map((attr, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            <Input
+                              placeholder="বৈশিষ্ট্যের নাম (যেমন: কাগজের মান)"
+                              value={attr.key}
+                              className="flex-1"
+                              onChange={(e) => {
+                                const updated = [...formData.customAttributes];
+                                updated[idx].key = e.target.value;
+                                setFormData({ ...formData, customAttributes: updated });
+                              }}
+                            />
+                            <Input
+                              placeholder="মান (যেমন: ৮০ জিএসএম ক্রিম পেপার)"
+                              value={attr.value}
+                              className="flex-1"
+                              onChange={(e) => {
+                                const updated = [...formData.customAttributes];
+                                updated[idx].value = e.target.value;
+                                setFormData({ ...formData, customAttributes: updated });
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-9 w-9 text-destructive hover:bg-destructive/10"
+                              onClick={() => {
+                                setFormData({
+                                  ...formData,
+                                  customAttributes: formData.customAttributes.filter((_, i) => i !== idx),
+                                });
+                              }}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+
+                        {formData.customAttributes.length === 0 && (
+                          <p className="text-xs text-muted-foreground italic py-1">
+                            কোনো অতিরিক্ত কাস্টম বৈশিষ্ট্য যুক্ত নেই। প্রয়োজন হলে উপরের বোতামে চাপুন।
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </TabsContent>
 

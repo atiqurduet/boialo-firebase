@@ -210,25 +210,31 @@ export const SearchDropdown = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const safeProducts = Array.isArray(results?.products) ? results.products : [];
+  const safeCategories = Array.isArray(results?.categories) ? results.categories : [];
+  const safeAutocomplete = Array.isArray(results?.autocomplete) ? results.autocomplete : [];
+  const safeSuggestions = Array.isArray(results?.suggestions) ? results.suggestions : [];
+  const totalProducts = typeof results?.totalProducts === 'number' ? results.totalProducts : safeProducts.length;
+
   const handleSearch = useCallback(() => {
     if (query.trim()) {
       saveRecentSearch(query.trim());
       setRecentSearches(getRecentSearches());
       supabase.from('search_analytics').insert({ 
         query: query.trim(), 
-        results_count: results.totalProducts 
+        results_count: totalProducts 
       }).then();
       navigate(`/shop?search=${encodeURIComponent(query)}`);
       setIsOpen(false);
     }
-  }, [query, navigate, results.totalProducts]);
+  }, [query, navigate, totalProducts]);
 
   // Keyboard navigation
   const navigableItems = (() => {
     const items: { type: string; value: string; link?: string }[] = [];
     if (query.length >= 1) {
-      results.autocomplete?.forEach(a => items.push({ type: 'autocomplete', value: a }));
-      results.products.forEach((p: any) => {
+      safeAutocomplete.forEach(a => items.push({ type: 'autocomplete', value: a }));
+      safeProducts.forEach((p: any) => {
         const link = p.source === 'digital'
           ? `/ebooks/${p.slug}`
           : p.source === 'universal' 
@@ -315,7 +321,7 @@ export const SearchDropdown = ({
     );
   };
 
-  const hasResults = results.products.length > 0 || results.categories.length > 0;
+  const hasResults = safeProducts.length > 0 || safeCategories.length > 0;
   const showDropdown = isOpen;
   const showEmptyState = !query || query.length < 1;
   const showImageResults = imageResults || imageSearching;
@@ -640,14 +646,14 @@ export const SearchDropdown = ({
                 {!showEmptyState && (
                   <>
                     {/* Categories Section */}
-                    {results.categories.length > 0 && (
+                    {safeCategories.length > 0 && (
                       <div className="p-3 border-b border-border">
                         <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
                           <FolderTree className="w-3 h-3" />
                           <span>ক্যাটাগরি</span>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                          {results.categories.map((category) => (
+                          {safeCategories.map((category) => (
                             <Link
                               key={category.id}
                               to={`/categories/${category.slug}`}
@@ -662,14 +668,14 @@ export const SearchDropdown = ({
                     )}
 
                     {/* Autocomplete Suggestions */}
-                    {results.autocomplete && results.autocomplete.length > 0 && (
+                    {safeAutocomplete.length > 0 && (
                       <div className="p-3 border-b border-border">
                         <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
                           <Search className="w-3 h-3" />
                           <span>আপনি কি খুঁজছেন?</span>
                         </div>
                         <div className="space-y-0.5">
-                          {results.autocomplete.map((item, idx) => {
+                          {safeAutocomplete.map((item, idx) => {
                             const itemIdx = idx;
                             return (
                               <button
@@ -694,14 +700,14 @@ export const SearchDropdown = ({
                     )}
 
                     {/* Suggestions (Authors/Publishers) */}
-                    {results.suggestions.length > 0 && (
+                    {safeSuggestions.length > 0 && (
                       <div className="p-3 border-b border-border">
                         <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
                           <TrendingUp className="w-3 h-3" />
                           <span>সাজেশন</span>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                          {results.suggestions.map((suggestion, idx) => (
+                          {safeSuggestions.map((suggestion, idx) => (
                             <button
                               key={idx}
                               onClick={() => handleSuggestionClick(suggestion)}
@@ -715,14 +721,14 @@ export const SearchDropdown = ({
                     )}
 
                     {/* Products Section */}
-                    {results.products.length > 0 && (
+                    {safeProducts.length > 0 && (
                       <div>
                         <div className="px-3 pt-2 pb-1">
                           <span className="text-xs text-muted-foreground">
-                            {results.totalProducts} প্রোডাক্ট পাওয়া গেছে
+                            {totalProducts} প্রোডাক্ট পাওয়া গেছে
                           </span>
                         </div>
-                        {results.products.map((product: any, idx: number) => {
+                        {safeProducts.map((product: any, idx: number) => {
                           const isUniversal = product.source === 'universal';
                           const isDigital = product.source === 'digital';
                           const productLink = isDigital
@@ -730,7 +736,7 @@ export const SearchDropdown = ({
                             : isUniversal 
                               ? `/${product.publisher || 'lifestyle'}/${product.slug}` 
                               : `/product/${product.slug}`;
-                          const itemIdx = (results.autocomplete?.length || 0) + idx;
+                          const itemIdx = safeAutocomplete.length + idx;
                           return (
                             <Link
                               key={product.id}
@@ -838,7 +844,7 @@ export const SearchDropdown = ({
               onClick={handleSearch}
               className="w-full py-3 text-center text-sm text-primary hover:bg-muted transition-colors border-t border-border font-medium flex items-center justify-center gap-2"
             >
-              "{query}" দিয়ে সব ফলাফল দেখুন ({results.totalProducts})
+              "{query}" দিয়ে সব ফলাফল দেখুন ({totalProducts})
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           )}

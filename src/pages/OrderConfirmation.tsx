@@ -45,19 +45,18 @@ const OrderConfirmation = () => {
 
   useEffect(() => {
     const fetchOrder = async () => {
-      if (!user || !orderNumberFromState) {
+      if (!orderNumberFromState) {
         setLoading(false);
         return;
       }
 
       try {
-        // Fetch order
+        // Fetch order by order_number
         const { data: orderData, error: orderError } = await supabase
           .from("orders")
           .select("*")
           .eq("order_number", orderNumberFromState)
-          .eq("user_id", user.id)
-          .single();
+          .maybeSingle();
 
         if (orderError) throw orderError;
 
@@ -79,7 +78,7 @@ const OrderConfirmation = () => {
       }
     };
 
-    if (!authLoading) {
+    if (!authLoading || orderNumberFromState) {
       fetchOrder();
     }
   }, [user, orderNumberFromState, authLoading]);

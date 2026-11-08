@@ -187,11 +187,30 @@ const Cart = () => {
                   <span className="text-muted-foreground">ডেলিভারি চার্জ</span>
                   <span>{shipping === 0 ? "ফ্রি" : `৳${shipping}`}</span>
                 </div>
-                {subtotal < 499 && (
-                  <p className="text-xs text-muted-foreground">
-                    ৳{499 - subtotal} টাকা আরো কিনলে ডেলিভারি ফ্রি!
-                  </p>
-                )}
+                {/* Free shipping progress indicator */}
+                <div className="bg-muted/50 p-3.5 rounded-xl border border-border/60 space-y-1.5">
+                  <div className="flex items-center justify-between text-xs font-medium">
+                    <span>
+                      {subtotal >= 499 ? (
+                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                          🎉 অভিনন্দন! আপনি ফ্রি ডেলিভারি পাচ্ছেন!
+                        </span>
+                      ) : (
+                        <span>
+                          ফ্রি ডেলিভারি পেতে আরও <strong className="text-primary font-bold">৳{499 - subtotal}</strong> টাকার পণ্য যোগ করুন
+                        </span>
+                      )}
+                    </span>
+                    <span className="font-mono text-muted-foreground">{Math.min(100, Math.round((subtotal / 499) * 100))}%</span>
+                  </div>
+                  <div className="w-full bg-border/60 h-2 rounded-full overflow-hidden">
+                    <div
+                      className="bg-gradient-to-r from-primary to-emerald-500 h-full rounded-full transition-all duration-300"
+                      style={{ width: `${Math.min(100, Math.round((subtotal / 499) * 100))}%` }}
+                    />
+                  </div>
+                </div>
+
                 <div className="border-t border-border pt-3">
                   <div className="flex items-center justify-between font-bold text-lg">
                     <span>সর্বমোট</span>

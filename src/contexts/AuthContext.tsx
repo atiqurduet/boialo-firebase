@@ -1,8 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
-import { onAuthStateChanged, signOut as firebaseSignOut, signInWithPopup } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
-import { auth, db, googleAuthProvider, handleFirestoreError, OperationType } from "@/lib/firebase";
+import { onAuthStateChanged, signOut as firebaseSignOut } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 import { supabase } from "@/integrations/supabase/client";
 import { trackCompleteRegistration, trackLogin } from "@/lib/analytics";
 import { logLoginEvent } from "@/hooks/useAuditLog";
@@ -41,6 +40,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const { endSession } = useSessionTracker(user?.id ?? null, signOutFn);
 
   useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sbSession) => {
+      if (sbSession) {
+        setSession(sbSession);
+        setUser(sbSession.user ?? null);
+        setLoading(false);
+      }
+    });
+
+    supabase.auth.getSession().then(({ data: { session: sbSession } }) => {
+      if (sbSession) {
+        setSession(sbSession);
+        setUser(sbSession.user ?? null);
+      }
+      setLoading(false);
+    });
+
     const unsubscribeFirebase = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
         const token = await fbUser.getIdToken();
@@ -65,61 +80,53 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         };
         setUser(mappedUser);
         setSession(mappedSession);
-      } else {
-        setUser(null);
-        setSession(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => {
+      subscription.unsubscribe();
       unsubscribeFirebase();
     };
   }, []);
 
-  const signUp = async (email: string, _password: string, fullName: string) => {
-    try {
-      const credential = await signInWithPopup(auth, googleAuthProvider);
-      const fbUser = credential.user;
-      if (fbUser) {
-        const profilePath = `profiles/${fbUser.uid}`;
-        try {
-          await setDoc(
-            doc(db, 'profiles', fbUser.uid),
-            {
-              id: fbUser.uid,
-              email: fbUser.email || email,
-              full_name: fullName || fbUser.displayName || '',
-              created_at: new Date().toISOString(),
-            },
-            { merge: true }
-          );
-        } catch (err) {
-          if (err instanceof Error && err.message.includes('Missing or insufficient permissions')) {
-            handleFirestoreError(err, OperationType.WRITE, profilePath);
-          }
-        }
-      }
-      trackCompleteRegistration('google');
-      return { error: null };
-    } catch (error: any) {
-      return { error: error as Error };
+  const signUp = async (email: string, password: string, fullName: string) => {
+    const redirectUrl = `${window.location.origin}/`;
+
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: redirectUrl,
+        data: {
+          full_name: fullName,
+        },
+      },
+    });
+
+    if (!error) {
+      trackCompleteRegistration('email');
     }
+
+    return { error: error as Error | null };
   };
 
-  const signIn = async (email: string, _password: string) => {
-    try {
-      const credential = await signInWithPopup(auth, googleAuthProvider);
-      const signedInEmail = credential.user.email || email;
-      trackLogin('google');
-      logLoginEvent(signedInEmail, true, 'login');
-      toast.success(`${signedInEmail} → লগইন সফল`);
-      return { error: null };
-    } catch (error: any) {
+  const signIn = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (!error) {
+      trackLogin('email');
+      logLoginEvent(email, true, 'login');
+      toast.success(`${email} → লগইন সফল`);
+    } else {
       logLoginEvent(email, false, 'login_failed');
-      toast.error('লগইন ব্যর্থ হয়েছে (Google Sign-In ব্যবহার করুন)');
-      return { error: error as Error };
+      toast.error('লগইন ব্যর্থ হয়েছে');
     }
+
+    return { error: error as Error | null };
   };
 
   const signOut = useCallback(async () => {
