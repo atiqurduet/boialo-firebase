@@ -14,6 +14,7 @@ import { CompareFloatingBar } from "./components/CompareFloatingBar";
 import { PopupBannerRenderer } from "./components/PopupBannerRenderer";
 import { WhatsAppFloatingButton } from "./components/WhatsAppFloatingButton";
 import ChatWidget from "./components/ChatWidget";
+import { Analytics } from "@vercel/analytics/react";
 
 // Critical path - load immediately
 import Index from "./pages/Index";
@@ -324,6 +325,7 @@ const App = () => (
               <WhatsAppFloatingButton />
               <CompareFloatingBar />
               <PopupBannerRenderer />
+              <Analytics />
               </AnalyticsProvider>
             </BrowserRouter>
           </TooltipProvider>
