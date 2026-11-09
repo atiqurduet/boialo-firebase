@@ -22,6 +22,7 @@ import { trackInitiateCheckout, trackAddPaymentInfo, trackAddShippingInfo, track
 import { serverTrackInitiateCheckout, serverTrackPurchase } from "@/lib/serverTracking";
 import { cn } from "@/lib/utils";
 import { useLoyaltyPoints } from "@/hooks/useLoyaltyPoints";
+import { TrustBadges } from "@/components/TrustBadges";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -65,6 +66,7 @@ const Checkout = () => {
   const [deliveryArea, setDeliveryArea] = useState("inside");
   const [selectedZoneId, setSelectedZoneId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isOrderCompleted, setIsOrderCompleted] = useState(false);
   const [abandonedCheckoutId, setAbandonedCheckoutId] = useState<string | null>(null);
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
   const [dbPaymentMethods, setDbPaymentMethods] = useState<any[]>([]);
@@ -93,16 +95,25 @@ const Checkout = () => {
   const [otpSettings, setOtpSettings] = useState({
     otp_enabled: false, otp_only_for_cod: false, otp_required_for_cod: false, otp_required_for_new_customers: false,
   });
+  const [isGiftWrap, setIsGiftWrap] = useState(false);
+  const [giftRecipient, setGiftRecipient] = useState("");
+  const [giftMessage, setGiftMessage] = useState("");
+  const [giftWrapConfig, setGiftWrapConfig] = useState({
+    enabled: true,
+    price: 30,
+    title: "প্রিমিয়াম গিফট র‍্যাপিং ও উইশ কার্ড",
+  });
 
   // Fetch all config data
   useEffect(() => {
     const fetchAll = async () => {
-      const [otpRes, payRes, zoneRes, fieldsRes, rulesRes] = await Promise.all([
+      const [otpRes, payRes, zoneRes, fieldsRes, rulesRes, featRes] = await Promise.all([
         supabase.from("site_settings").select("setting_key, setting_value").eq("category", "security").in("setting_key", ["otp_enabled", "otp_only_for_cod", "otp_required_for_cod", "otp_required_for_new_customers"]),
         (supabase as any).rpc("get_public_payment_methods"),
         supabase.from("delivery_zones").select("*").eq("is_active", true).order("sort_order"),
         supabase.from("checkout_form_fields").select("*").eq("is_active", true).order("sort_order"),
         supabase.from("dynamic_pricing_rules").select("*").eq("is_active", true).order("priority", { ascending: false }),
+        supabase.from("site_settings").select("setting_key, setting_value").in("setting_key", ["gift_wrap_enabled", "gift_wrap_price", "gift_wrap_title"]),
       ]);
 
       if (otpRes.data) {
@@ -119,6 +130,15 @@ const Checkout = () => {
       }
       if (fieldsRes.data) setDynamicFields(fieldsRes.data);
       if (rulesRes.data) setPricingRules(rulesRes.data);
+      if (featRes?.data) {
+        const map: Record<string, any> = {};
+        featRes.data.forEach((d: any) => { map[d.setting_key] = d.setting_value; });
+        setGiftWrapConfig({
+          enabled: map.gift_wrap_enabled !== false && map.gift_wrap_enabled !== "false",
+          price: Number(map.gift_wrap_price) || 30,
+          title: map.gift_wrap_title || "প্রিমিয়াম গিফট র‍্যাপিং ও উইশ কার্ড",
+        });
+      }
     };
     fetchAll();
   }, []);
@@ -179,7 +199,12 @@ const Checkout = () => {
     if (countdown > 0) { const t = setTimeout(() => setCountdown(countdown - 1), 1000); return () => clearTimeout(t); }
   }, [countdown]);
 
-  useEffect(() => { if (!cartLoading && cartItems.length === 0) { toast.error("আপনার কার্ট খালি"); navigate("/cart"); } }, [cartItems, cartLoading]);
+  useEffect(() => {
+    if (!cartLoading && !isSubmitting && !isOrderCompleted && cartItems.length === 0) {
+      toast.error("আপনার কার্ট খালি");
+      navigate("/cart");
+    }
+  }, [cartItems, cartLoading, isSubmitting, isOrderCompleted]);
 
   // Pre-fill profile
   useEffect(() => {
@@ -232,7 +257,8 @@ const Checkout = () => {
     ? Math.min(Math.floor(pointsToRedeem * pointsRate), basePayable)
     : 0;
 
-  const total = Math.max(0, basePayable - pointsDiscount + effectiveDeliveryCharge);
+  const giftWrapFee = isGiftWrap ? (giftWrapConfig.price || 30) : 0;
+  const total = Math.max(0, basePayable - pointsDiscount + effectiveDeliveryCharge + giftWrapFee);
   const earnedOrderPoints = calculateEarnedPoints(subtotal);
   const deliveryAreaLabel = deliveryZones.length > 0 ? (selectedZone?.zone_name_bn || "default") : (deliveryArea === "outside" ? "ঢাকার বাইরে" : "ঢাকার ভিতরে");
 
@@ -248,8 +274,22 @@ const Checkout = () => {
     sslcommerz: "from-blue-500/10 to-blue-600/5 border-blue-200 dark:border-blue-800",
     card: "from-indigo-500/10 to-indigo-600/5 border-indigo-200 dark:border-indigo-800",
   };
-  const paymentIconMap: Record<string, any> = { cod: Truck, bkash: Smartphone, nagad: Smartphone, sslcommerz: CreditCard, card: CreditCard };
-  const paymentMethods = dbPaymentMethods.map((m: any) => ({
+  const paymentIconMap: Record<string, any> = {
+    cod: Truck,
+    bkash: Smartphone,
+    nagad: Smartphone,
+    rocket: Smartphone,
+    upay: Smartphone,
+    sslcommerz: CreditCard,
+    card: CreditCard,
+  };
+  const fallbackPaymentMethods = [
+    { provider: 'cod', name_bn: 'ক্যাশ অন ডেলিভারি', name_en: 'Cash on Delivery', payment_mode: 'manual', manual_instructions: 'পণ্য হাতে পেয়ে টাকা পরিশোধ করুন।' },
+    { provider: 'bkash', name_bn: 'বিকাশ', name_en: 'bKash', payment_mode: 'manual', manual_number: '01700000000', manual_type: 'Send Money', manual_instructions: 'বিকাশ নম্বরে সেন্ড মানি করে নিচে ট্রান্জেকশন আইডি দিন।' },
+    { provider: 'nagad', name_bn: 'নগদ', name_en: 'Nagad', payment_mode: 'manual', manual_number: '01700000000', manual_type: 'Send Money', manual_instructions: 'নগদ নম্বরে সেন্ড মানি করে নিচে ট্রান্জেকশন আইডি দিন।' },
+  ];
+  const activeDbMethods = dbPaymentMethods.length > 0 ? dbPaymentMethods : fallbackPaymentMethods;
+  const paymentMethods = activeDbMethods.map((m: any) => ({
     id: m.provider, name: m.name_bn,
     description: m.provider === 'cod' ? 'পণ্য হাতে পেয়ে টাকা দিন' : m.payment_mode === 'api' ? 'নিরাপদ অনলাইন পেমেন্ট' : m.manual_number ? `${m.manual_type || 'Send Money'}: ${m.manual_number}` : m.name_bn,
     icon: paymentIconMap[m.provider] || CreditCard,
@@ -356,11 +396,17 @@ const Checkout = () => {
         full_name: formData.fullName.trim(), phone: formData.phone.trim(), email: formData.email?.trim() || null,
         address: formData.address.trim(), notes: formData.notes?.trim() || null,
         phone_verified: phoneVerified || !isOtpRequired(),
+        is_gift_wrapped: isGiftWrap,
+        gift_recipient: isGiftWrap ? giftRecipient.trim() || null : null,
+        gift_message: isGiftWrap ? giftMessage.trim() || null : null,
+        gift_wrap_fee: giftWrapFee,
       }).select().single();
       if (orderError) throw orderError;
 
+      const orderId = (order as any)?.id || (Array.isArray(order) ? (order[0] as any)?.id : null) || `ord-${Date.now()}`;
+
       const orderItemsData = cartItems.map(item => ({
-        order_id: order.id, product_id: item.productId, product_title: item.product.title,
+        order_id: orderId, product_id: item.productId, product_title: item.product.title,
         product_image: item.product.image || null, price: item.product.price, quantity: item.quantity,
       }));
       const { error: itemsError } = await supabase.from("order_items").insert(orderItemsData);
@@ -370,9 +416,9 @@ const Checkout = () => {
       if (user) {
         try {
           if (isFreeDeliveryApplied) {
-            await redeemLoyaltyFreeDelivery(order.id);
+            await redeemLoyaltyFreeDelivery(orderId);
           } else if (pointRedeemMode === 'discount' && pointsToRedeem > 0) {
-            await redeemLoyaltyPoints(pointsToRedeem, order.id);
+            await redeemLoyaltyPoints(pointsToRedeem, orderId);
           }
 
           // Credit points earned on this order!
@@ -381,7 +427,7 @@ const Checkout = () => {
               earnedOrderPoints,
               'order_reward',
               `অর্ডার #${orderNumber} সম্পন্ন করার জন্য রিওয়ার্ড পয়েন্ট`,
-              order.id
+              orderId
             );
           }
 
@@ -395,16 +441,17 @@ const Checkout = () => {
       }
 
       if (abandonedCheckoutId) {
-        await supabase.from("abandoned_checkouts").update({ recovered: true, recovered_order_id: order.id }).eq("id", abandonedCheckoutId);
+        await supabase.from("abandoned_checkouts").update({ recovered: true, recovered_order_id: orderId }).eq("id", abandonedCheckoutId);
       }
 
       const selectedMethodObj = paymentMethods.find((m: any) => m.id === paymentMethod);
       const isApiMode = selectedMethodObj?.payment_mode === "api";
 
-      if (paymentMethod === "bkash" && isApiMode) { await initBkashPayment(order.id, orderNumber, orderTotal); return; }
-      if (paymentMethod === "nagad" && isApiMode) { await initNagadPayment(order.id, orderNumber, orderTotal); return; }
-      if (paymentMethod === "sslcommerz" && isApiMode) { await initSSLCommerzPayment(order.id, orderNumber, orderTotal); return; }
+      if (paymentMethod === "bkash" && isApiMode) { await initBkashPayment(orderId, orderNumber, orderTotal); return; }
+      if (paymentMethod === "nagad" && isApiMode) { await initNagadPayment(orderId, orderNumber, orderTotal); return; }
+      if (paymentMethod === "sslcommerz" && isApiMode) { await initSSLCommerzPayment(orderId, orderNumber, orderTotal); return; }
 
+      setIsOrderCompleted(true);
       await clearCart();
       trackPurchase({
         transaction_id: orderNumber, value: orderTotal, currency: 'BDT', shipping: deliveryCharge, coupon: appliedCoupon?.code,
@@ -422,10 +469,10 @@ const Checkout = () => {
   };
 
   const isOtpRequired = () => {
-    if (otpSettings.otp_only_for_cod === true) return paymentMethod === "cod";
     if (!otpSettings.otp_enabled) return false;
+    if (otpSettings.otp_only_for_cod === true) return paymentMethod === "cod";
     if (otpSettings.otp_required_for_cod && paymentMethod === "cod") return true;
-    return true;
+    return false;
   };
 
   const handlePlaceOrder = async () => {
@@ -988,12 +1035,67 @@ const Checkout = () => {
                 </div>
               </div>
 
+              {/* Gift Wrapping & Personalized Greeting Card */}
+              {giftWrapConfig.enabled && (
+                <div className="px-5 py-4 border-b border-border bg-gradient-to-r from-pink-500/5 via-rose-500/5 to-pink-500/5">
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isGiftWrap}
+                      onChange={(e) => setIsGiftWrap(e.target.checked)}
+                      className="mt-1 h-4 w-4 rounded border-pink-400 text-pink-600 focus:ring-pink-500"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-1.5 text-pink-700 dark:text-pink-300">
+                          <Gift className="w-4 h-4 text-pink-600" /> {giftWrapConfig.title}
+                        </span>
+                        <span className="text-xs font-bold text-pink-600">+৳{giftWrapConfig.price}</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        কাউকে উপহার পাঠাতে সুন্দর গিফট পেপারে র‍্যাপিং ও সাথে আপনার শুভেচ্ছা বার্তা যুক্ত করুন
+                      </p>
+                    </div>
+                  </label>
+
+                  {isGiftWrap && (
+                    <div className="mt-3.5 pl-6 space-y-2.5 animate-in fade-in duration-200">
+                      <div>
+                        <Label className="text-[11px] font-semibold">প্রাপকের নাম (কার জন্য উপহার?)</Label>
+                        <Input
+                          placeholder="যেমন: প্রিয় সুমাইয়া / বন্ধু আরিফ"
+                          value={giftRecipient}
+                          onChange={(e) => setGiftRecipient(e.target.value)}
+                          className="h-8 text-xs mt-1 bg-background"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[11px] font-semibold">উইশ কার্ডে আপনার শুভেচ্ছা বার্তা</Label>
+                        <Textarea
+                          placeholder="আপনার ব্যক্তিগত অনুভূতি বা শুভেচ্ছা লিখুন যা আমরা সুন্দর কার্ডে প্রিন্ট করে পাঠাব..."
+                          value={giftMessage}
+                          onChange={(e) => setGiftMessage(e.target.value)}
+                          rows={2}
+                          className="text-xs mt-1 bg-background resize-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Price Breakdown */}
               <div className="px-5 py-5 space-y-3 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">সাবটোটাল</span>
                   <span className="font-medium">৳{subtotal}</span>
                 </div>
+                {giftWrapFee > 0 && (
+                  <div className="flex justify-between text-pink-600 font-semibold">
+                    <span className="flex items-center gap-1"><Gift className="w-3.5 h-3.5" /> গিফট র‍্যাপিং ও উইশ কার্ড</span>
+                    <span>+৳{giftWrapFee}</span>
+                  </div>
+                )}
                 {couponDiscount > 0 && (
                   <div className="flex justify-between text-primary">
                     <span className="flex items-center gap-1"><Ticket className="w-3.5 h-3.5" /> {appliedCoupon?.code}</span>
@@ -1039,7 +1141,8 @@ const Checkout = () => {
               </div>
 
               {/* Place Order (Desktop) */}
-              <div className="px-5 pb-5 hidden lg:block">
+              <div className="px-5 pb-5 hidden lg:block space-y-3">
+                <TrustBadges variant="compact" />
                 <Button
                   onClick={handlePlaceOrder}
                   disabled={isSubmitting}

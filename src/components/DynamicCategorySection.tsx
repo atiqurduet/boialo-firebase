@@ -35,6 +35,8 @@ interface CategorySettings {
   show_subcategory_indicator?: boolean;
   enable_scroll_arrows?: boolean;
   gradient_border?: boolean;
+  category_ids?: string[];
+  show_subcategories?: boolean;
 }
 
 interface CombinedCategory {
@@ -53,6 +55,7 @@ interface DynamicCategorySectionProps {
   universalCategories?: UniversalCategory[];
   products?: ProductWithCategory[];
   title?: string;
+  subtitle?: string;
   settings?: CategorySettings;
 }
 
@@ -67,6 +70,7 @@ export const DynamicCategorySection = ({
   universalCategories = [],
   products = [],
   title = "জনপ্রিয় ক্যাটাগরি",
+  subtitle,
   settings = {},
 }: DynamicCategorySectionProps) => {
   const [selectedParent, setSelectedParent] = useState<CombinedCategory | null>(null);
@@ -82,6 +86,8 @@ export const DynamicCategorySection = ({
   const showSubcategoryIndicator = settings.show_subcategory_indicator !== false;
   const enableScrollArrows = settings.enable_scroll_arrows !== false;
   const gradientBorder = settings.gradient_border !== false;
+  const selectedIds = settings.category_ids || [];
+  const showSubcategories = settings.show_subcategories || false;
 
   // Merge book + universal categories into combined list
   const allCombined = useMemo((): CombinedCategory[] => {
@@ -134,7 +140,17 @@ export const DynamicCategorySection = ({
     return counts;
   }, [allCombined, products]);
 
-  const parentCategories = allCombined.filter(c => !c.parent_id).slice(0, maxCategories);
+  const parentCategories = useMemo(() => {
+    if (selectedIds.length > 0) {
+      return selectedIds
+        .map(id => allCombined.find(c => c.id === id))
+        .filter((c): c is CombinedCategory => Boolean(c))
+        .slice(0, maxCategories);
+    }
+    const baseList = showSubcategories ? allCombined : allCombined.filter(c => !c.parent_id);
+    return baseList.slice(0, maxCategories);
+  }, [allCombined, selectedIds, showSubcategories, maxCategories]);
+
   const subcategories = selectedParent 
     ? allCombined.filter(c => c.parent_id === selectedParent.id)
     : [];
@@ -198,7 +214,7 @@ export const DynamicCategorySection = ({
               {selectedParent ? selectedParent.name_bn : title}
             </h2>
             {!selectedParent && (
-              <p className="text-sm text-muted-foreground mt-0.5">আপনার পছন্দের ক্যাটাগরি বেছে নিন</p>
+              <p className="text-sm text-muted-foreground mt-0.5">{subtitle || "আপনার পছন্দের ক্যাটাগরি বেছে নিন"}</p>
             )}
           </div>
         </div>

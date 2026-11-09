@@ -221,12 +221,11 @@ export const DynamicCategoryTopProducts = ({
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
-  let parentCategories = categories.filter(c => !c.parent_id);
-  if (selectedCategoryIds && selectedCategoryIds.length > 0) {
-    parentCategories = parentCategories.filter(c => selectedCategoryIds.includes(c.id));
-  }
+  let targetCategories = selectedCategoryIds && selectedCategoryIds.length > 0
+    ? categories.filter(c => selectedCategoryIds.includes(c.id))
+    : categories.filter(c => !c.parent_id);
 
-  const categoriesWithProducts = parentCategories.filter(cat => {
+  const categoriesWithProducts = targetCategories.filter(cat => {
     const subCatIds = categories.filter(c => c.parent_id === cat.id).map(c => c.id);
     const allCatIds = [cat.id, ...subCatIds];
     return products.some(p => p.category_id && allCatIds.includes(p.category_id));

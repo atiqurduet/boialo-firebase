@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { Heart, ShoppingBag, User, Menu, LogOut, Package, Search, ChevronDown, X, Gift, Sparkles } from "lucide-react";
+import { Heart, ShoppingBag, User, Menu, LogOut, Package, Search, ChevronDown, X, Gift, Sparkles, Shield } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { SearchDropdown } from "@/components/SearchDropdown";
 import { MobileMenu } from "@/components/MobileMenu";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { useCartContext } from "@/contexts/CartContext";
 import { useWishlistContext } from "@/contexts/WishlistContext";
 import { useNavigationMenu } from "@/hooks/useNavigationMenu";
@@ -41,6 +42,7 @@ export const Header = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const { user, signOut } = useAuth();
+  const { isAdmin } = useAdminAuth();
   const { cartCount } = useCartContext();
   const { wishlistCount } = useWishlistContext();
   const { menuItems, loading: menuLoading } = useNavigationMenu('header');
@@ -59,9 +61,24 @@ export const Header = () => {
     navigate("/");
   };
 
-  const navLinks = menuItems.length > 0 
+  let navLinks = menuItems.length > 0 
     ? menuItems.map(item => ({ name: item.title_bn, path: item.url, openInNewTab: item.open_in_new_tab }))
     : fallbackNavLinks.map(item => ({ ...item, openInNewTab: false }));
+
+  // Ensure 'সিলেবাস বইসেট' is always prominently present in navigation
+  if (!navLinks.some(l => l.path === '/syllabus')) {
+    const insertIdx = navLinks.findIndex(l => l.path === '/shop');
+    const syllabusItem = { name: "সিলেবাস বইসেট", path: "/syllabus", openInNewTab: false };
+    if (insertIdx !== -1) {
+      navLinks = [
+        ...navLinks.slice(0, insertIdx + 1),
+        syllabusItem,
+        ...navLinks.slice(insertIdx + 1)
+      ];
+    } else {
+      navLinks.splice(2, 0, syllabusItem);
+    }
+  }
 
   const isActiveLink = (path: string) => {
     if (path === '/') return location.pathname === '/';
@@ -195,6 +212,13 @@ export const Header = () => {
                       <p className="text-sm font-medium truncate">{user.user_metadata?.full_name || 'User'}</p>
                       <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                     </div>
+                    {isAdmin && (
+                      <DropdownMenuItem asChild>
+                        <Link to="/admin" className="cursor-pointer flex items-center gap-2 py-2 text-primary font-bold bg-primary/10 rounded-md mb-1">
+                          <Shield className="w-4 h-4 text-primary" /> এডমিন প্যানেল
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem asChild>
                       <Link to="/profile" className="cursor-pointer flex items-center gap-2 py-2">
                         <User className="w-4 h-4" /> আমার প্রোফাইল
@@ -284,6 +308,11 @@ export const Header = () => {
                       )}
                     >
                       {link.name}
+                      {link.path === '/syllabus' && (
+                        <span className="ml-1.5 inline-block text-[10px] font-bold text-white bg-rose-600 px-1.5 py-0.5 rounded-full leading-none shadow-xs">
+                          অফার
+                        </span>
+                      )}
                       {isActive && (
                         <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-primary rounded-full" />
                       )}

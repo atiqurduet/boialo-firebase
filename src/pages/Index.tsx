@@ -1,10 +1,10 @@
+import React from "react";
 import { SEOHead } from "@/components/SEOHead";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import { Header } from "@/components/Header";
 import { DynamicHeroSlider } from "@/components/DynamicHeroSlider";
 import { DynamicCategorySection } from "@/components/DynamicCategorySection";
 import { DynamicProductGrid } from "@/components/DynamicProductGrid";
-import { DynamicFlashSale } from "@/components/DynamicFlashSale";
 import { DynamicPromoBanner } from "@/components/DynamicPromoBanner";
 import { DynamicUniversalProductGrid } from "@/components/DynamicUniversalProductGrid";
 import { DynamicUniversalCategorySection } from "@/components/DynamicUniversalCategorySection";
@@ -12,6 +12,9 @@ import { DynamicUniversalFlashSale } from "@/components/DynamicUniversalFlashSal
 import { DynamicCategoryWithSubcategories } from "@/components/DynamicCategoryWithSubcategories";
 import { DynamicCategoryTopProducts } from "@/components/DynamicCategoryTopProducts";
 import { TrustBadges } from "@/components/TrustBadges";
+import { FlashSaleSection } from "@/components/FlashSaleSection";
+import { CustomComboBuilder } from "@/components/CustomComboBuilder";
+import { ScratchCouponModal } from "@/components/ScratchCouponModal";
 import { NewsletterSection } from "@/components/NewsletterSection";
 import { FeaturedOfferBanner } from "@/components/FeaturedOfferBanner";
 import { Footer } from "@/components/Footer";
@@ -47,6 +50,7 @@ const Index = () => {
     sections, 
     loading,
     getProductsByCategory,
+    getProductsByCategories,
     getProductsByWriter,
     getProductsByIds,
     getUniversalProductsByCategory,
@@ -54,8 +58,6 @@ const Index = () => {
     getUniversalCategoriesByType
   } = useHomepageData();
 
-  // Filter products by criteria
-  const discountedProducts = products.filter(p => p.discount_percent && p.discount_percent >= 30);
   const featuredProducts = products.filter(p => p.is_featured);
   const preorderProducts = products.filter(p => p.is_preorder === true);
   const newProducts = products.slice(0, 10);
@@ -66,10 +68,7 @@ const Index = () => {
         <AnnouncementBar />
         <Header />
         <main>
-          {/* Hero skeleton */}
           <Skeleton className="h-[300px] md:h-[450px] w-full" />
-          
-          {/* Trust badges skeleton */}
           <div className="container py-6">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               {[...Array(4)].map((_, i) => (
@@ -77,8 +76,6 @@ const Index = () => {
               ))}
             </div>
           </div>
-
-          {/* Content skeleton */}
           <div className="container py-4 space-y-8">
             <div className="space-y-4">
               <Skeleton className="h-8 w-48" />
@@ -100,68 +97,145 @@ const Index = () => {
     );
   }
 
-  // Render section based on type
-  const renderSection = (section: typeof sections[0]) => {
+  // Helper to optionally filter products by category_id or category_ids from section settings
+  const filterBySettingsCategories = (sourceProducts: typeof products, settings: any) => {
+    const catIds: string[] = Array.isArray(settings?.category_ids) && settings.category_ids.length > 0
+      ? settings.category_ids
+      : settings?.category_id
+      ? [settings.category_id]
+      : [];
+    if (catIds.length === 0) return sourceProducts;
+    const allowedIds = new Set(getProductsByCategories(catIds).map(p => p.id));
+    return sourceProducts.filter(p => allowedIds.has(p.id));
+  };
+
+  // Render section based on type and database configuration
+  const renderSection = (section: typeof sections[0], index: number) => {
     const settings = section.settings || {};
     const limit = settings.limit || 10;
     const sectionTitle = settings.hide_title ? '' : section.title_bn;
     const sectionSubtitle = settings.hide_title ? undefined : (section.subtitle_bn || undefined);
     const useCarousel = settings.use_carousel !== false; // default true
 
+    let content: React.ReactNode = null;
+
     switch (section.section_type) {
-      case 'flash_sale':
-        const flashProducts = discountedProducts.length > 0 
-          ? discountedProducts.slice(0, limit) 
-          : products.slice(0, limit);
+      case 'hero_slider':
+        return <DynamicHeroSlider key={section.id} banners={banners} />;
+
+      case 'promo_ticker':
+        return <PromoTickerMarquee key={section.id} title={sectionTitle} settings={settings} />;
+
+      case 'trust_badges':
         return (
-          <DynamicFlashSale 
+          <div key={section.id} className="container mt-4 mb-2">
+            <TrustBadges settings={settings} />
+          </div>
+        );
+
+      case 'flash_sale':
+        return (
+          <FlashSaleSection
             key={section.id}
-            products={flashProducts} 
             title={sectionTitle}
-            useCarousel={useCarousel}
-            columns={settings.columns || 5}
+            subtitle={sectionSubtitle}
+            settings={settings}
           />
         );
 
       case 'category_grid':
-        return (categories.length > 0 || universalCategories.length > 0) ? (
+        content = (categories.length > 0 || universalCategories.length > 0) ? (
           <DynamicCategorySection 
-            key={section.id}
             categories={categories}
             universalCategories={universalCategories}
             products={products}
             title={sectionTitle}
+            subtitle={sectionSubtitle}
             settings={settings}
           />
         ) : null;
+        break;
 
-      case 'category_products':
-        const categoryId = settings.category_id;
-        if (!categoryId) return null;
-        const categoryProducts = getProductsByCategory(categoryId).slice(0, limit);
-        const category = categories.find(c => c.id === categoryId);
+      case 'book_spotlight': {
+        let targetProduct = products[0];
+        if (settings.product_id) {
+          const found = products.find(p => p.id === settings.product_id);
+          if (found) targetProduct = found;
+        } else if (settings.category_id) {
+          const catProds = getProductsByCategory(settings.category_id);
+          if (catProds.length > 0) targetProduct = catProds[0];
+        }
+        content = (
+          <BookOfTheDaySpotlight
+            title={sectionTitle}
+            subtitle={sectionSubtitle}
+            settings={settings}
+            product={
+              targetProduct
+                ? {
+                    id: targetProduct.id,
+                    title: targetProduct.title_bn,
+                    author: targetProduct.author || "জনপ্রিয় লেখক",
+                    publisher: targetProduct.publisher || undefined,
+                    price: targetProduct.price,
+                    originalPrice: targetProduct.original_price || undefined,
+                    discount: targetProduct.discount_percent || 20,
+                    image:
+                      Array.isArray(targetProduct.images) && targetProduct.images.length > 0
+                        ? targetProduct.images[0]
+                        : "/placeholder.svg",
+                    description: targetProduct.description_bn || undefined,
+                    slug: targetProduct.slug,
+                  }
+                : undefined
+            }
+          />
+        );
+        break;
+      }
+
+      case 'combo_builder':
+        content = (
+          <CustomComboBuilder
+            title={sectionTitle}
+            subtitle={sectionSubtitle}
+            settings={settings}
+          />
+        );
+        break;
+
+      case 'category_products': {
+        const categoryIds: string[] = Array.isArray(settings.category_ids) && settings.category_ids.length > 0
+          ? settings.category_ids
+          : settings.category_id
+          ? [settings.category_id]
+          : [];
+        if (categoryIds.length === 0) return null;
+        const categoryProducts = getProductsByCategories(categoryIds).slice(0, limit);
+        const primaryCategory = categories.find(c => c.id === categoryIds[0]);
         if (categoryProducts.length === 0) return null;
-        return (
+        content = (
           <DynamicProductGrid
-            key={section.id}
             products={categoryProducts}
             title={sectionTitle}
             subtitle={sectionSubtitle}
-            viewAllLink={settings.view_all_link || `/shop?category=${category?.slug || ''}`}
+            viewAllLink={settings.view_all_link || `/shop?category=${primaryCategory?.slug || ''}`}
             columns={settings.columns || 5}
+            showRanking={settings.show_ranking}
             useCarousel={useCarousel}
           />
         );
+        break;
+      }
 
-      case 'writer_products':
+      case 'writer_products': {
         const writerId = settings.writer_id;
         if (!writerId) return null;
         const writerProducts = getProductsByWriter(writerId).slice(0, limit);
         const writer = writers.find(w => w.id === writerId);
         if (writerProducts.length === 0) return null;
-        return (
+        content = (
           <DynamicProductGrid
-            key={section.id}
             products={writerProducts}
             title={sectionTitle}
             subtitle={sectionSubtitle || (writer ? writer.name_bn : undefined)}
@@ -170,43 +244,52 @@ const Index = () => {
             useCarousel={useCarousel}
           />
         );
+        break;
+      }
 
-      case 'selected_products':
+      case 'selected_products': {
         const productIds: string[] = settings.product_ids || [];
         if (productIds.length === 0) return null;
         const selectedProducts = getProductsByIds(productIds);
         if (selectedProducts.length === 0) return null;
-        return (
+        content = (
           <DynamicProductGrid
-            key={section.id}
             products={selectedProducts}
             title={sectionTitle}
             subtitle={sectionSubtitle}
             viewAllLink={settings.view_all_link}
             columns={settings.columns || 5}
+            showRanking={settings.show_ranking}
             useCarousel={useCarousel}
           />
         );
+        break;
+      }
 
-      case 'new_releases':
-        return products.length > 0 ? (
+      case 'new_releases': {
+        const filteredNew = filterBySettingsCategories(products, settings);
+        content = filteredNew.length > 0 ? (
           <DynamicProductGrid
-            key={section.id}
-            products={newProducts.slice(0, limit)}
+            products={filteredNew.slice(0, limit)}
             title={sectionTitle}
             subtitle={sectionSubtitle}
             viewAllLink={settings.view_all_link || "/shop?sort=new"}
             columns={settings.columns || 5}
+            showRanking={settings.show_ranking}
             useCarousel={useCarousel}
           />
         ) : null;
+        break;
+      }
 
-      case 'bestsellers':
-        const bestProducts = featuredProducts.length > 0 
-          ? featuredProducts.slice(0, limit) 
-          : products.slice(0, limit);
-        return products.length > 0 ? (
-          <div key={section.id} className="bg-card rounded-xl p-6 shadow-sm my-8">
+      case 'bestsellers': {
+        const pool = filterBySettingsCategories(
+          featuredProducts.length > 0 ? featuredProducts : products,
+          settings
+        );
+        const bestProducts = (pool.length > 0 ? pool : products).slice(0, limit);
+        content = bestProducts.length > 0 ? (
+          <div className="bg-card rounded-xl p-6 shadow-sm">
             <DynamicProductGrid
               products={bestProducts}
               title={sectionTitle}
@@ -218,18 +301,22 @@ const Index = () => {
             />
           </div>
         ) : null;
+        break;
+      }
 
       case 'promo_banner':
-        return <DynamicPromoBanner key={section.id} settings={settings} />;
+        content = <DynamicPromoBanner settings={settings} />;
+        break;
 
       case 'recommended':
-      case 'featured_products':
-        const recProducts = featuredProducts.length > 0 
-          ? featuredProducts.slice(0, limit) 
-          : products.slice(0, limit);
-        return products.length > 0 ? (
+      case 'featured_products': {
+        const pool = filterBySettingsCategories(
+          featuredProducts.length > 0 ? featuredProducts : products,
+          settings
+        );
+        const recProducts = (pool.length > 0 ? pool : products).slice(0, limit);
+        content = recProducts.length > 0 ? (
           <DynamicProductGrid
-            key={section.id}
             products={recProducts}
             title={sectionTitle}
             subtitle={sectionSubtitle}
@@ -239,13 +326,15 @@ const Index = () => {
             useCarousel={useCarousel}
           />
         ) : null;
+        break;
+      }
 
-      case 'preorder_products':
-        if (preorderProducts.length === 0) return null;
-        return (
+      case 'preorder_products': {
+        const pool = filterBySettingsCategories(preorderProducts, settings);
+        if (pool.length === 0) return null;
+        content = (
           <DynamicProductGrid
-            key={section.id}
-            products={preorderProducts.slice(0, limit)}
+            products={pool.slice(0, limit)}
             title={sectionTitle}
             subtitle={sectionSubtitle}
             viewAllLink={settings.view_all_link || "/shop?preorder=true"}
@@ -253,15 +342,75 @@ const Index = () => {
             useCarousel={useCarousel}
           />
         );
+        break;
+      }
 
-      case 'trust_badges':
-        return <TrustBadges key={section.id} />;
+      case 'top_selling_universal_products':
+        content = universalProducts.length > 0 ? (
+          <TopSellingUniversalProducts
+            limit={settings.limit || 10}
+            title={sectionTitle || "স্টেশনারি ও লাইফস্টাইল সংগ্রহ"}
+            subtitle={sectionSubtitle || "ইসলামিক প্ল্যানার, খাঁটি উদ আতর, মেটালিক বুকমার্ক ও কাঠের রেহাল"}
+            useCarousel={useCarousel}
+            columns={settings.columns || 5}
+            productType={settings.product_type}
+          />
+        ) : null;
+        break;
+
+      case 'top_authors':
+        content = (
+          <TopAuthorsSection
+            limit={settings.limit || 12}
+            title={sectionTitle}
+            subtitle={sectionSubtitle}
+          />
+        );
+        break;
+
+      case 'billboard':
+        content = (
+          <MidPageSponsorAdBillboard
+            title={sectionTitle}
+            subtitle={sectionSubtitle}
+            settings={settings}
+          />
+        );
+        break;
+
+      case 'community_stats':
+        content = (
+          <ReaderCommunityStats
+            title={sectionTitle}
+            subtitle={sectionSubtitle}
+            settings={settings}
+          />
+        );
+        break;
+
+      case 'recently_viewed':
+        content = (
+          <div className="content-lazy">
+            <RecentlyViewed />
+          </div>
+        );
+        break;
 
       case 'newsletter':
-        return <NewsletterSection key={section.id} />;
+        return (
+          <NewsletterSection
+            key={section.id}
+            title={sectionTitle}
+            subtitle={sectionSubtitle}
+            settings={settings}
+          />
+        );
 
-      // Universal Products Section Types
-      case 'universal_category_products':
+      case 'featured_offer':
+        content = <FeaturedOfferBanner />;
+        break;
+
+      case 'universal_category_products': {
         const universalCategoryId = settings.universal_category_id;
         const productType = settings.product_type;
         if (!universalCategoryId && !productType) return null;
@@ -276,36 +425,41 @@ const Index = () => {
         if (uniProducts.length === 0) return null;
         
         const uniCategory = universalCategories.find(c => c.id === universalCategoryId);
-        return (
+        content = (
           <DynamicUniversalProductGrid
-            key={section.id}
             products={uniProducts}
             title={sectionTitle}
             subtitle={sectionSubtitle}
-            viewAllLink={settings.view_all_link || `/${productType}${uniCategory ? `?category=${uniCategory.slug}` : ''}`}
+            viewAllLink={settings.view_all_link || `/${productType || 'lifestyle'}${uniCategory ? `?category=${uniCategory.slug}` : ''}`}
             columns={settings.columns || 5}
             useCarousel={useCarousel}
           />
         );
+        break;
+      }
 
-      case 'universal_category_grid':
+      case 'universal_category_grid': {
         const gridProductType = settings.product_type;
         if (!gridProductType) return null;
         
-        const typeCategories = getUniversalCategoriesByType(gridProductType);
+        let typeCategories = getUniversalCategoriesByType(gridProductType);
+        if (Array.isArray(settings.universal_category_ids) && settings.universal_category_ids.length > 0) {
+          typeCategories = typeCategories.filter(c => settings.universal_category_ids.includes(c.id));
+        }
         if (typeCategories.length === 0) return null;
         
-        return (
+        content = (
           <DynamicUniversalCategorySection
-            key={section.id}
             categories={typeCategories}
             title={sectionTitle}
             productType={gridProductType}
             maxCategories={settings.max_categories || 8}
           />
         );
+        break;
+      }
 
-      case 'universal_flash_sale':
+      case 'universal_flash_sale': {
         const flashProductType = settings.product_type;
         const minDiscount = settings.min_discount || 10;
         
@@ -322,9 +476,8 @@ const Index = () => {
         
         if (flashUniProducts.length === 0) return null;
         
-        return (
+        content = (
           <DynamicUniversalFlashSale
-            key={section.id}
             products={flashUniProducts}
             title={sectionTitle}
             viewAllLink={settings.view_all_link || (flashProductType && flashProductType !== 'all' ? `/${flashProductType}` : '/lifestyle')}
@@ -332,11 +485,12 @@ const Index = () => {
             columns={settings.columns || 5}
           />
         );
+        break;
+      }
 
       case 'ai_recommendations':
-        return (
+        content = (
           <AIRecommendations
-            key={section.id}
             limit={settings.limit || 10}
             columns={settings.columns || 5}
             title={sectionTitle}
@@ -345,11 +499,11 @@ const Index = () => {
             useCarousel={useCarousel}
           />
         );
+        break;
 
       case 'top_selling_products':
-        return (
+        content = (
           <TopSellingProducts
-            key={section.id}
             limit={settings.limit || 10}
             title={sectionTitle}
             subtitle={sectionSubtitle}
@@ -357,47 +511,30 @@ const Index = () => {
             columns={settings.columns || 5}
           />
         );
-
-      case 'top_authors':
-        return (
-          <TopAuthorsSection
-            key={section.id}
-            limit={settings.limit || 12}
-            title={sectionTitle}
-            subtitle={sectionSubtitle}
-          />
-        );
-
-      case 'top_selling_universal_products':
-        return (
-          <TopSellingUniversalProducts
-            key={section.id}
-            limit={settings.limit || 10}
-            title={sectionTitle}
-            subtitle={sectionSubtitle}
-            useCarousel={useCarousel}
-            columns={settings.columns || 5}
-          />
-        );
+        break;
 
       case 'category_subcategory_grid':
-        return (
+        content = (
           <DynamicCategoryWithSubcategories
-            key={section.id}
             categories={categories}
+            universalCategories={universalCategories}
+            products={products}
             title={sectionTitle}
             subtitle={sectionSubtitle}
             maxParentCategories={settings.max_parent_categories || 8}
-            maxSubcategories={settings.max_subcategories || 6}
+            maxSubcategories={settings.max_subcategories || 4}
             columns={settings.columns || 4}
             selectedCategoryIds={settings.category_ids}
+            selectedSubcategoryIds={settings.subcategory_ids}
+            useCarousel={settings.use_carousel !== false}
+            settings={settings}
           />
         );
+        break;
 
       case 'category_top_products':
-        return (
+        content = (
           <DynamicCategoryTopProducts
-            key={section.id}
             categories={categories}
             products={products}
             title={sectionTitle}
@@ -408,11 +545,11 @@ const Index = () => {
             selectedCategoryIds={settings.category_ids}
           />
         );
+        break;
 
       case 'recently_sold':
-        return (
+        content = (
           <RecentlySoldProducts
-            key={section.id}
             limit={settings.limit || 10}
             title={sectionTitle}
             subtitle={sectionSubtitle}
@@ -420,11 +557,11 @@ const Index = () => {
             columns={settings.columns || 5}
           />
         );
+        break;
 
       case 'offer_products':
-        return (
+        content = (
           <OfferProducts
-            key={section.id}
             limit={settings.limit || 10}
             title={sectionTitle}
             subtitle={sectionSubtitle}
@@ -433,11 +570,11 @@ const Index = () => {
             minDiscount={settings.min_discount || 5}
           />
         );
+        break;
 
       case 'ebooks':
-        return (
+        content = (
           <EbookSection
-            key={section.id}
             limit={settings.limit || 10}
             title={sectionTitle}
             subtitle={sectionSubtitle}
@@ -445,11 +582,11 @@ const Index = () => {
             columns={settings.columns || 5}
           />
         );
+        break;
 
       case 'weekly_best_books':
-        return (
+        content = (
           <WeeklyBestBooks
-            key={section.id}
             limit={settings.limit || 10}
             title={sectionTitle}
             subtitle={sectionSubtitle}
@@ -457,11 +594,11 @@ const Index = () => {
             columns={settings.columns || 5}
           />
         );
+        break;
 
       case 'weekly_best_universal':
-        return (
+        content = (
           <WeeklyBestUniversalProducts
-            key={section.id}
             limit={settings.limit || 10}
             title={sectionTitle}
             subtitle={sectionSubtitle}
@@ -469,11 +606,11 @@ const Index = () => {
             columns={settings.columns || 5}
           />
         );
+        break;
 
       case 'bundle_showcase':
-        return (
+        content = (
           <BundleShowcase
-            key={section.id}
             limit={settings.limit || 6}
             title={sectionTitle}
             subtitle={sectionSubtitle}
@@ -481,31 +618,42 @@ const Index = () => {
             columns={settings.columns || 3}
           />
         );
+        break;
 
       case 'best_selling_brands':
-        return (
+        content = (
           <BestSellingBrands
-            key={section.id}
             limit={settings.limit || 12}
             title={sectionTitle}
             subtitle={sectionSubtitle}
           />
         );
+        break;
 
       case 'best_selling_publishers':
-        return (
+        content = (
           <BestSellingPublishers
-            key={section.id}
             limit={settings.limit || 12}
             title={sectionTitle}
             subtitle={sectionSubtitle}
           />
         );
+        break;
 
       default:
         return null;
     }
+
+    if (!content) return null;
+
+    return (
+      <div key={section.id} className={`container ${index > 2 ? 'content-lazy' : ''}`}>
+        {content}
+      </div>
+    );
   };
+
+  const activeSections = sections.filter(s => s.is_active);
 
   return (
     <div className="min-h-screen bg-background animate-page-in">
@@ -517,126 +665,36 @@ const Index = () => {
       />
       <AnnouncementBar />
       <Header />
-      <main>
-      {/* Dynamic Hero Slider */}
-      <DynamicHeroSlider banners={banners} />
-
-      {/* Promotional Ticker Marquee */}
-      <PromoTickerMarquee />
-
-      {/* Trust Badges */}
-      <TrustBadges />
-
-      <div className="container py-5 md:py-8 space-y-6">
-        {/* Featured Offer Banner */}
-        <FeaturedOfferBanner />
-
-        {/* Book of the Day Spotlight */}
-        <BookOfTheDaySpotlight
-          product={
-            products.length > 0
-              ? {
-                  id: products[0].id,
-                  title: products[0].title_bn,
-                  author: products[0].author || "জনপ্রিয় লেখক",
-                  publisher: products[0].publisher,
-                  price: products[0].price,
-                  originalPrice: products[0].original_price || undefined,
-                  discount: products[0].discount_percent || 20,
-                  image:
-                    Array.isArray(products[0].images) && products[0].images.length > 0
-                      ? products[0].images[0]
-                      : "/placeholder.svg",
-                  description: products[0].description_bn || undefined,
-                  slug: products[0].slug,
-                }
-              : undefined
-          }
-        />
-
-        {/* Render sections in order, or fallback to curated layout */}
-        {sections.length > 0 ? (
-          sections.map((section, index) => (
-            <div key={section.id} className={index > 2 ? "content-lazy" : ""}>
-              {renderSection(section)}
-            </div>
-          ))
+      <main className="space-y-6 md:space-y-10">
+        {activeSections.length > 0 ? (
+          activeSections.map((section, index) => renderSection(section, index))
         ) : (
-          <div className="space-y-10 py-4">
-            {/* 1. Latest Books */}
+          <div className="container space-y-12 py-4">
+            <DynamicHeroSlider banners={banners} />
+            <PromoTickerMarquee />
+            <TrustBadges />
+            <FlashSaleSection />
             <DynamicProductGrid
               title="নতুন প্রকাশিত বইসমূহ"
               subtitle="বইআলোর সংগ্রহে সদ্য যুক্ত হওয়া সেরা বইসমূহ"
-              products={products.slice(0, 10).map(p => ({
-                id: p.id,
-                slug: p.slug,
-                title: p.title_bn,
-                author: p.author || 'লেখক',
-                price: p.price,
-                originalPrice: p.original_price || undefined,
-                discount: p.discount_percent || undefined,
-                image: Array.isArray(p.images) && p.images.length > 0 ? p.images[0] : '/placeholder.svg',
-              }))}
+              products={newProducts}
               viewAllLink="/shop?sort=newest"
             />
-
-            {/* 2. Popular Categories */}
+            <CustomComboBuilder />
             <DynamicCategorySection
               title="জনপ্রিয় ক্যাটাগরি"
               subtitle="আপনার পছন্দের বিষয়ে বই খুঁজুন"
-              categories={categories.slice(0, 8).map(c => ({
-                id: c.id,
-                slug: c.slug,
-                name: c.name_bn,
-                image: c.image_url || '/placeholder.svg',
-              }))}
+              categories={categories}
+              universalCategories={universalCategories}
+              products={products}
             />
-
-            {/* 3. Discounted Books */}
-            {discountedProducts.length > 0 && (
-              <DynamicProductGrid
-                title="সেরা ছাড়ের বইসমূহ"
-                subtitle="বিশেষ মূল্যে পছন্দের বই কিনুন"
-                products={discountedProducts.slice(0, 10).map(p => ({
-                  id: p.id,
-                  slug: p.slug,
-                  title: p.title_bn,
-                  author: p.author || 'লেখক',
-                  price: p.price,
-                  originalPrice: p.original_price || undefined,
-                  discount: p.discount_percent || undefined,
-                  image: Array.isArray(p.images) && p.images.length > 0 ? p.images[0] : '/placeholder.svg',
-                }))}
-                viewAllLink="/offers"
-              />
-            )}
-
-            {/* 4. Top Authors */}
-            <TopAuthorsSection />
-
-            {/* 5. Best Selling Publishers */}
-            <BestSellingPublishers />
+            <NewsletterSection />
           </div>
         )}
-
-        {/* Mid-Page Sponsor Ad Billboard */}
-        <MidPageSponsorAdBillboard />
-
-        {/* Reader Community Stats & Testimonials */}
-        <ReaderCommunityStats />
-
-        {/* Recently Viewed Products */}
-        <div className="content-lazy">
-          <RecentlyViewed />
-        </div>
-      </div>
-
-      {/* Newsletter Section - always show at bottom */}
-      <NewsletterSection />
       </main>
 
-      {/* Sticky Bottom Ad / Hot Deal Bar */}
       <StickyBottomAdBar />
+      <ScratchCouponModal />
       <Footer />
     </div>
   );

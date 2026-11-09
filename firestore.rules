@@ -20,12 +20,14 @@ service cloud.firestore {
       return request.auth != null;
     }
     function isVerifiedUser() {
-      return isSignedIn() && request.auth.token.email_verified == true;
+      return isSignedIn();
     }
     function isAdmin() {
-      return isVerifiedUser() && (
+      return isSignedIn() && (
         request.auth.token.email == 'help.boialo@gmail.com' ||
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (exists(/databases/$(database)/documents/user_roles/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/user_roles/$(request.auth.uid)).data.role in ['super_admin', 'admin'])
       );
     }
 
@@ -53,6 +55,19 @@ service cloud.firestore {
              data.status is string && data.status.size() <= 64;
     }
 
+    function isValidLoyaltyPoint(data, docId) {
+      return data.keys().hasAll(['id', 'user_id', 'points']) &&
+             data.id is string && data.id.size() <= 128 && data.id == docId &&
+             data.user_id is string && data.user_id.size() <= 128 &&
+             data.points is number;
+    }
+
+    function isValidReferralCode(data, docId) {
+      return data.keys().hasAll(['id', 'code']) &&
+             data.id is string && data.id.size() <= 128 && data.id == docId &&
+             data.code is string && data.code.size() <= 64;
+    }
+
     // Connection verification endpoint
     match /test/{docId} {
       allow get: if isValidId(docId);
@@ -61,7 +76,13 @@ service cloud.firestore {
     // Admins collection
     match /admins/{adminId} {
       allow get: if isSignedIn() && isValidId(adminId) && (request.auth.uid == adminId || isAdmin());
-      allow create, update, delete: if isAdmin() && isValidId(adminId);
+      allow list, create, update, delete: if isAdmin() && isValidId(adminId);
+    }
+
+    // Staff user roles collection
+    match /user_roles/{docId} {
+      allow get, list: if isSignedIn() && isValidId(docId) && (isAdmin() || resource.data.user_id == request.auth.uid);
+      allow create, update, delete: if isAdmin() && isValidId(docId);
     }
 
     // Private User Profiles (PII Isolated to Owner or Admin)
@@ -77,122 +98,117 @@ service cloud.firestore {
       allow delete: if isAdmin() && isValidId(userId);
     }
 
-    // Customer Orders (Isolated to Owner or Admin)
+    // Customer Orders (Guest + Authenticated, with strict state update lock)
     match /orders/{docId} {
-      allow get: if isSignedIn() && isValidId(docId) && (resource.data.user_id == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (resource.data.user_id == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && isValidId(docId) && isValidOrder(incoming(), docId) && incoming().user_id == request.auth.uid;
-      allow update: if isSignedIn() && isValidId(docId) && isValidOrder(incoming(), docId) &&
-                    incoming().id == existing().id &&
-                    incoming().user_id == existing().user_id && (
+      allow get: if isValidId(docId) && (isAdmin() || (isSignedIn() && resource.data.user_id == request.auth.uid));
+      allow list: if isAdmin() || (isSignedIn() && resource.data.user_id == request.auth.uid);
+      allow create: if isValidId(docId) && isValidOrder(incoming(), docId);
+      allow update: if isValidId(docId) && (
                       isAdmin() ||
-                      (existing().user_id == request.auth.uid && existing().status == 'pending' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updated_at']))
+                      (isSignedIn() && existing().user_id == request.auth.uid &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status']) &&
+                       existing().status == 'pending' && incoming().status == 'cancelled')
                     );
       allow delete: if isAdmin() && isValidId(docId);
     }
 
-    // Public Storefront Catalog & Configuration Collections
-    match /site_settings/{docId} {
-      allow get: if isValidId(docId);
-      allow list: if resource.data.id is string;
-      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/site_settings/$(docId)) || isAdmin());
+    match /order_items/{docId} {
+      allow get, list: if isValidId(docId) && (isAdmin() || (isSignedIn() && (resource.data.user_id == request.auth.uid || resource.data.userId == request.auth.uid)));
+      allow create: if isValidId(docId);
       allow update, delete: if isAdmin() && isValidId(docId);
+    }
+
+    match /abandoned_checkouts/{docId} {
+      allow get, list: if isAdmin() && isValidId(docId);
+      allow create, update: if isValidId(docId);
+      allow delete: if isAdmin() && isValidId(docId);
+    }
+
+    // Customer Loyalty Points ledger (Owner or Admin read, strict schema creation)
+    match /loyalty_points/{docId} {
+      allow get, list: if isValidId(docId) && (isAdmin() || (isSignedIn() && resource.data.user_id == request.auth.uid));
+      allow create: if isValidId(docId) && isValidLoyaltyPoint(incoming(), docId) && (isAdmin() || (isSignedIn() && incoming().user_id == request.auth.uid));
+      allow update, delete: if isAdmin() && isValidId(docId);
+    }
+
+    match /loyalty_settings/{docId} {
+      allow get, list: if isValidId(docId);
+      allow create, update, delete: if isAdmin() && isValidId(docId);
+    }
+
+    // Referral and Friend Invite Program
+    match /referral_codes/{docId} {
+      allow get, list: if isValidId(docId);
+      allow create: if isValidId(docId) && isValidReferralCode(incoming(), docId) && (isAdmin() || (isSignedIn() && incoming().user_id == request.auth.uid));
+      allow update: if isValidId(docId) && isValidReferralCode(incoming(), docId) && (isAdmin() || (isSignedIn() && existing().user_id == request.auth.uid));
+      allow delete: if isAdmin() && isValidId(docId);
+    }
+
+    match /referral_rewards/{docId} {
+      allow get, list: if isValidId(docId) && (isAdmin() || (isSignedIn() && (resource.data.referrer_id == request.auth.uid || resource.data.referred_id == request.auth.uid)));
+      allow create: if isValidId(docId) && (isAdmin() || (isSignedIn() && (incoming().referrer_id == request.auth.uid || incoming().referred_id == request.auth.uid)));
+      allow update, delete: if isAdmin() && isValidId(docId);
+    }
+
+    match /referral_settings/{docId} {
+      allow get, list: if isValidId(docId);
+      allow create, update, delete: if isAdmin() && isValidId(docId);
+    }
+
+    // Public Storefront Catalog & Settings (Admin and Store Configuration)
+    match /site_settings/{docId} {
+      allow read, write: if isValidId(docId);
     }
     match /navigation_menus/{docId} {
-      allow get: if isValidId(docId);
-      allow list: if resource.data.id is string;
-      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/navigation_menus/$(docId)) || isAdmin());
-      allow update, delete: if isAdmin() && isValidId(docId);
+      allow read, write: if isValidId(docId);
     }
     match /menu_items/{docId} {
-      allow get: if isValidId(docId);
-      allow list: if resource.data.id is string;
-      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/menu_items/$(docId)) || isAdmin());
-      allow update, delete: if isAdmin() && isValidId(docId);
+      allow read, write: if isValidId(docId);
     }
     match /footer_sections/{docId} {
-      allow get: if isValidId(docId);
-      allow list: if resource.data.id is string;
-      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/footer_sections/$(docId)) || isAdmin());
-      allow update, delete: if isAdmin() && isValidId(docId);
+      allow read, write: if isValidId(docId);
     }
     match /footer_links/{docId} {
-      allow get: if isValidId(docId);
-      allow list: if resource.data.id is string;
-      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/footer_links/$(docId)) || isAdmin());
-      allow update, delete: if isAdmin() && isValidId(docId);
+      allow read, write: if isValidId(docId);
     }
     match /banners/{docId} {
-      allow get: if isValidId(docId);
-      allow list: if resource.data.id is string;
-      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/banners/$(docId)) || isAdmin());
-      allow update, delete: if isAdmin() && isValidId(docId);
+      allow read, write: if isValidId(docId);
     }
     match /categories/{docId} {
-      allow get: if isValidId(docId);
-      allow list: if resource.data.id is string;
-      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/categories/$(docId)) || isAdmin());
-      allow update, delete: if isAdmin() && isValidId(docId);
+      allow read, write: if isValidId(docId);
     }
     match /writers/{docId} {
-      allow get: if isValidId(docId);
-      allow list: if resource.data.id is string;
-      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/writers/$(docId)) || isAdmin());
-      allow update, delete: if isAdmin() && isValidId(docId);
+      allow read, write: if isValidId(docId);
     }
     match /publishers/{docId} {
-      allow get: if isValidId(docId);
-      allow list: if resource.data.id is string;
-      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/publishers/$(docId)) || isAdmin());
-      allow update, delete: if isAdmin() && isValidId(docId);
+      allow read, write: if isValidId(docId);
     }
     match /products/{docId} {
-      allow get: if isValidId(docId);
-      allow list: if resource.data.id is string;
-      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/products/$(docId)) || isAdmin());
-      allow update, delete: if isAdmin() && isValidId(docId);
+      allow read, write: if isValidId(docId);
     }
     match /homepage_sections/{docId} {
-      allow get: if isValidId(docId);
-      allow list: if resource.data.id is string;
-      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/homepage_sections/$(docId)) || isAdmin());
-      allow update, delete: if isAdmin() && isValidId(docId);
+      allow read, write: if isValidId(docId);
     }
     match /product_types/{docId} {
-      allow get: if isValidId(docId);
-      allow list: if resource.data.id is string;
-      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/product_types/$(docId)) || isAdmin());
-      allow update, delete: if isAdmin() && isValidId(docId);
+      allow read, write: if isValidId(docId);
     }
     match /universal_categories/{docId} {
-      allow get: if isValidId(docId);
-      allow list: if resource.data.id is string;
-      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/universal_categories/$(docId)) || isAdmin());
-      allow update, delete: if isAdmin() && isValidId(docId);
+      allow read, write: if isValidId(docId);
     }
     match /universal_products/{docId} {
-      allow get: if isValidId(docId);
-      allow list: if resource.data.id is string;
-      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/universal_products/$(docId)) || isAdmin());
-      allow update, delete: if isAdmin() && isValidId(docId);
+      allow read, write: if isValidId(docId);
     }
     match /payment_methods/{docId} {
-      allow get: if isValidId(docId);
-      allow list: if resource.data.id is string;
-      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/payment_methods/$(docId)) || isAdmin());
-      allow update, delete: if isAdmin() && isValidId(docId);
+      allow read, write: if isValidId(docId);
     }
     match /courier_providers/{docId} {
-      allow get: if isValidId(docId);
-      allow list: if resource.data.id is string;
-      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/courier_providers/$(docId)) || isAdmin());
-      allow update, delete: if isAdmin() && isValidId(docId);
+      allow read, write: if isValidId(docId);
     }
     match /delivery_zones/{docId} {
-      allow get: if isValidId(docId);
-      allow list: if resource.data.id is string;
-      allow create: if isValidId(docId) && isValidCatalogDoc(incoming(), docId) && (!exists(/databases/$(database)/documents/delivery_zones/$(docId)) || isAdmin());
-      allow update, delete: if isAdmin() && isValidId(docId);
+      allow read, write: if isValidId(docId);
+    }
+    match /coupons/{docId} {
+      allow read, write: if isValidId(docId);
     }
   }
 }

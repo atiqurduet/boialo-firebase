@@ -31,6 +31,7 @@ import { OrderStatusPanel } from '@/components/admin/OrderStatusPanel';
 import { OrderTaskAssignment } from '@/components/admin/OrderTaskAssignment';
 import { BulkStatusUpdate } from '@/components/admin/BulkStatusUpdate';
 import { QuickTaskAssign } from '@/components/admin/QuickTaskAssign';
+import { OrderInvoiceModal } from '@/components/admin/OrderInvoiceModal';
 
 interface Order {
   id: string;
@@ -81,6 +82,8 @@ const AdminOrders = () => {
   const [bulkCourierOpen, setBulkCourierOpen] = useState(false);
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
   const [statusNote, setStatusNote] = useState('');
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+  const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<any>(null);
   const { toast } = useToast();
 
   const toggleOrderSelection = (orderId: string) => {
@@ -575,11 +578,13 @@ const AdminOrders = () => {
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            onClick={() => generateDocument(order.id, 'invoice')}
-                            disabled={generatingDoc === `${order.id}-invoice`}
-                            title="ইনভয়েস"
+                            onClick={() => {
+                              setSelectedOrderForInvoice(order);
+                              setInvoiceModalOpen(true);
+                            }}
+                            title="১-ক্লিক প্রিন্ট ইনভয়েস ও শিপিং লেবেল"
                           >
-                            {generatingDoc === `${order.id}-invoice` ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                            <Printer className="h-4 w-4 text-primary" />
                           </Button>
                           <Button 
                             variant="ghost" 
@@ -782,6 +787,16 @@ const AdminOrders = () => {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* 1-Click Printable Invoice & Courier Shipping Label Modal */}
+        <OrderInvoiceModal
+          order={selectedOrderForInvoice}
+          isOpen={invoiceModalOpen}
+          onClose={() => {
+            setInvoiceModalOpen(false);
+            setSelectedOrderForInvoice(null);
+          }}
+        />
       </div>
     </AdminLayout>
   );

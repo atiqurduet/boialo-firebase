@@ -2,16 +2,23 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Flame, Sparkles, Truck, Gift, ShieldCheck, Zap, ArrowRight, BellRing } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { cn } from "@/lib/utils";
 
 interface PromoTickerItem {
-  icon: any;
+  icon?: any;
   text: string;
   badge?: string;
   link: string;
 }
 
-export const PromoTickerMarquee = () => {
+interface PromoTickerMarqueeProps {
+  title?: string;
+  settings?: {
+    label_text?: string;
+    items?: Array<{ badge?: string; text: string; link?: string }>;
+  };
+}
+
+export const PromoTickerMarquee = ({ title, settings }: PromoTickerMarqueeProps) => {
   const [siteText, setSiteText] = useState<string>("");
 
   useEffect(() => {
@@ -30,7 +37,9 @@ export const PromoTickerMarquee = () => {
     fetchSetting();
   }, []);
 
-  const items: PromoTickerItem[] = [
+  const iconList = [Flame, Truck, Gift, ShieldCheck, Zap, Sparkles];
+
+  const defaultItems: PromoTickerItem[] = [
     {
       icon: Flame,
       text: siteText || "আজ মধ্যরাত পর্যন্ত বিশেষ ফ্ল্যাশ সেল চলছে! কুপন কোড: BOOK15",
@@ -63,20 +72,33 @@ export const PromoTickerMarquee = () => {
     },
   ];
 
+  const customItems = Array.isArray(settings?.items) && settings!.items.filter(i => i?.text).length > 0
+    ? settings!.items
+        .filter(i => i?.text)
+        .map((item, idx) => ({
+          icon: iconList[idx % iconList.length],
+          text: item.text,
+          badge: item.badge || "অফার",
+          link: item.link || "/offers",
+        }))
+    : defaultItems;
+
+  const labelText = settings?.label_text || title || "তাজা অফার:";
+
   return (
     <div className="bg-gradient-to-r from-amber-600 via-orange-600 to-primary text-white py-2 overflow-hidden shadow-inner border-y border-amber-500/30 select-none">
       <div className="flex items-center">
         {/* Fixed Label on left (desktop) */}
         <div className="hidden md:flex items-center gap-1.5 px-4 bg-black/30 backdrop-blur-md rounded-r-full py-1 text-xs font-bold text-amber-200 shrink-0 z-10 border-r border-amber-400/30">
           <BellRing className="w-3.5 h-3.5 animate-bounce text-amber-300" />
-          <span>তাজা অফার:</span>
+          <span>{labelText}</span>
         </div>
 
         {/* Marquee Scroller */}
         <div className="flex-1 overflow-hidden relative">
           <div className="flex items-center gap-10 whitespace-nowrap animate-marquee hover:[animation-play-state:paused]">
-            {[...items, ...items].map((item, idx) => {
-              const Icon = item.icon;
+            {[...customItems, ...customItems].map((item, idx) => {
+              const Icon = item.icon || Flame;
               return (
                 <Link
                   key={idx}

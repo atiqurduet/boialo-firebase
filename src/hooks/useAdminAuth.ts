@@ -27,18 +27,47 @@ export const useAdminAuth = (): AdminAuthState => {
         return;
       }
 
-      try {
-        const { data, error } = await (supabase as any)
-          .rpc('get_my_admin_role');
+      const userEmail = (user.email || '').toLowerCase().trim();
 
-        if (error) {
-          console.error('Error fetching user role:', error);
-          setRole(null);
+      // 1. Primary Owner & Super Admin email
+      if (userEmail === 'help.boialo@gmail.com') {
+        setRole('super_admin');
+        setLoading(false);
+        return;
+      }
+
+      // 2. Direct metadata role check
+      const metaRole = (user.app_metadata as any)?.role || (user.user_metadata as any)?.role;
+      if (metaRole && ['super_admin', 'admin', 'manager', 'support'].includes(metaRole)) {
+        setRole(metaRole as AppRole);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // 3. RPC check
+        const { data, error } = await (supabase as any).rpc('get_my_admin_role');
+
+        if (!error && data && ['super_admin', 'admin', 'manager', 'support'].includes(data)) {
+          setRole(data as AppRole);
+          setLoading(false);
+          return;
+        }
+
+        // 4. Fallback table query by email or user_id
+        const { data: roleRow } = await supabase
+          .from('user_roles')
+          .select('role')
+          .or(`email.eq.${userEmail},user_id.eq.${user.id}`)
+          .maybeSingle();
+
+        if (roleRow?.role && ['super_admin', 'admin', 'manager', 'support'].includes(roleRow.role)) {
+          setRole(roleRow.role as AppRole);
         } else {
-          setRole(data as AppRole || null);
+          setRole(null);
         }
       } catch (err) {
-        console.error('Error:', err);
+        console.error('Error fetching admin role:', err);
         setRole(null);
       } finally {
         setLoading(false);

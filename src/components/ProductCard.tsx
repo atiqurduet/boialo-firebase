@@ -58,13 +58,16 @@ export const ProductCard = ({ product, variant = "default" }: ProductCardProps) 
           <h4 className="font-medium text-sm text-foreground group-hover:text-primary transition-colors line-clamp-2">
             {product.title}
           </h4>
-          <Link 
-            to={`/shop?author=${encodeURIComponent(product.author)}`}
-            onClick={(e) => e.stopPropagation()}
-            className="text-xs text-muted-foreground mt-1 hover:text-primary transition-colors block"
+          <span 
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              window.location.href = `/shop?author=${encodeURIComponent(product.author)}`;
+            }}
+            className="text-xs text-muted-foreground mt-1 hover:text-primary transition-colors block cursor-pointer"
           >
             {product.author}
-          </Link>
+          </span>
           <div className="flex items-center gap-2 mt-1.5">
             <span className="price-sale text-sm">৳{product.price}</span>
             {hasDiscount && (

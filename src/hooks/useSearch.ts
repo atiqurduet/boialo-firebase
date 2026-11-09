@@ -73,7 +73,7 @@ export const useSearch = () => {
           body: { query, limit, includeCategories: true },
         });
 
-        if (fnError || !data || !Array.isArray(data.products)) {
+        if (fnError || !data || !Array.isArray(data.products) || (data.products.length === 0 && (!data.categories || data.categories.length === 0))) {
           await fallbackSearch(query, limit);
           return;
         }

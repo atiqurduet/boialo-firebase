@@ -10,12 +10,13 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, User, Mail, Phone, LogOut, Camera, MapPin, Lock, Calendar, CheckCircle, AlertCircle, RefreshCw, Gift } from "lucide-react";
+import { Loader2, User, Mail, Phone, LogOut, Camera, MapPin, Lock, Calendar, CheckCircle, AlertCircle, RefreshCw, Gift, BookOpen } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { z } from "zod";
 import { CustomerReferralWallet } from "@/components/CustomerReferralWallet";
+import { ReadingGoalTracker } from "@/components/ReadingGoalTracker";
 
 const profileSchema = z.object({
   full_name: z.string().min(1, "নাম আবশ্যক").max(100),
@@ -355,11 +356,14 @@ const Profile = () => {
           </Card>
 
           <Tabs defaultValue="personal" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 h-auto gap-1">
               <TabsTrigger value="personal">ব্যক্তিগত তথ্য</TabsTrigger>
               <TabsTrigger value="shipping">শিপিং ঠিকানা</TabsTrigger>
               <TabsTrigger value="wallet" className="flex items-center gap-1.5">
                 <Gift className="w-3.5 h-3.5 text-primary" /> ওয়ালেট ও রেফারাল
+              </TabsTrigger>
+              <TabsTrigger value="reading_goal" className="flex items-center gap-1.5">
+                <BookOpen className="w-3.5 h-3.5 text-primary" /> রিডিং গোল
               </TabsTrigger>
               <TabsTrigger value="security">নিরাপত্তা</TabsTrigger>
             </TabsList>
@@ -551,6 +555,11 @@ const Profile = () => {
             {/* Wallet & Referral Tab */}
             <TabsContent value="wallet" className="space-y-6">
               <CustomerReferralWallet />
+            </TabsContent>
+
+            {/* Annual Reading Goal Challenge Tab */}
+            <TabsContent value="reading_goal" className="space-y-6">
+              <ReadingGoalTracker />
             </TabsContent>
 
             {/* Security Tab */}

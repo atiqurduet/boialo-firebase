@@ -62,7 +62,29 @@ const fetchProduct = async (productId: string): Promise<ProductData | null> => {
     .eq('id', productId)
     .maybeSingle();
   
-  if (!data) return null;
+  if (!data) {
+    const { data: uprod } = await supabase
+      .from('universal_products')
+      .select('*')
+      .eq('id', productId)
+      .maybeSingle();
+
+    if (!uprod) return null;
+    const uImages = (uprod.images as string[]) || [];
+    return {
+      id: uprod.id,
+      slug: uprod.slug || uprod.id,
+      title: uprod.name_bn || uprod.name_en || 'পণ্য',
+      author: uprod.brand || 'Boialo Craft',
+      price: uprod.price,
+      originalPrice: uprod.original_price || undefined,
+      discount: uprod.discount_percent || undefined,
+      image: uImages.length > 0 ? uImages[0] : '/placeholder.svg',
+      category: uprod.category_id,
+      publisher: uprod.brand,
+      isPreorder: false,
+    };
+  }
   
   const images = data.images as string[] || [];
   return {

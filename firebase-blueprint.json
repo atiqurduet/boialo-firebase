@@ -63,6 +63,51 @@
         }
       },
       "required": ["id", "email"]
+    },
+    "LoyaltyPointRecord": {
+      "title": "LoyaltyPointRecord",
+      "description": "User loyalty points ledger transaction",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "user_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "points": {
+          "type": "number"
+        },
+        "type": {
+          "type": "string",
+          "maxLength": 32
+        }
+      },
+      "required": ["id", "user_id", "points"]
+    },
+    "ReferralCodeRecord": {
+      "title": "ReferralCodeRecord",
+      "description": "User invite and referral code",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "user_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "code": {
+          "type": "string",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "code"]
     }
   },
   "firestore": {
@@ -137,6 +182,42 @@
     "/orders/{docId}": {
       "schema": "OrderRecord",
       "description": "Customer orders restricted to owner or admin"
+    },
+    "/order_items/{docId}": {
+      "schema": "CatalogRecord",
+      "description": "Line items for customer orders"
+    },
+    "/abandoned_checkouts/{docId}": {
+      "schema": "CatalogRecord",
+      "description": "Abandoned checkout records protected for admin only"
+    },
+    "/loyalty_points/{docId}": {
+      "schema": "LoyaltyPointRecord",
+      "description": "Customer loyalty reward points ledger"
+    },
+    "/loyalty_settings/{docId}": {
+      "schema": "CatalogRecord",
+      "description": "Loyalty program settings"
+    },
+    "/referral_codes/{docId}": {
+      "schema": "ReferralCodeRecord",
+      "description": "Customer referral and friend invite codes"
+    },
+    "/referral_rewards/{docId}": {
+      "schema": "CatalogRecord",
+      "description": "Customer referral reward claims"
+    },
+    "/referral_settings/{docId}": {
+      "schema": "CatalogRecord",
+      "description": "Referral program configurations"
+    },
+    "/user_roles/{docId}": {
+      "schema": "CatalogRecord",
+      "description": "Staff role mappings protected for admin only"
+    },
+    "/admins/{adminId}": {
+      "schema": "CatalogRecord",
+      "description": "System administrator entries"
     },
     "/profiles/{userId}": {
       "schema": "UserProfile",

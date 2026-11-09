@@ -65,6 +65,28 @@ const ROLE_LABELS: Record<string, string> = {
   super_admin: 'সুপার এডমিন', admin: 'এডমিন', manager: 'ম্যানেজার', support: 'সাপোর্ট',
 };
 
+const safeDate = (val: any): Date => {
+  if (!val) return new Date();
+  const d = new Date(val);
+  return Number.isNaN(d.getTime()) ? new Date() : d;
+};
+
+const safeFormat = (val: any, fmt: string, opts?: any): string => {
+  try {
+    return format(safeDate(val), fmt, opts);
+  } catch {
+    return '-';
+  }
+};
+
+const safeFormatDistance = (val: any, opts?: any): string => {
+  try {
+    return formatDistanceToNow(safeDate(val), opts);
+  } catch {
+    return 'এইমাত্র';
+  }
+};
+
 // ── Active Sessions Panel ──
 const ActiveSessionsPanel = ({ staffProfiles, getStaffName, getStaffRole, getDeviceIcon, getBrowserFromUA }: {
   staffProfiles: any[]; getStaffName: (id: string | null) => string; getStaffRole: (id: string | null) => string;
@@ -101,7 +123,8 @@ const ActiveSessionsPanel = ({ staffProfiles, getStaffName, getStaffRole, getDev
   };
 
   const getInactiveMinutes = (lastActivity: string) => {
-    return Math.round((Date.now() - new Date(lastActivity).getTime()) / 60_000);
+    const d = safeDate(lastActivity);
+    return Math.max(0, Math.round((Date.now() - d.getTime()) / 60_000));
   };
 
   const getStatusColor = (lastActivity: string) => {
@@ -174,13 +197,16 @@ const ActiveSessionsPanel = ({ staffProfiles, getStaffName, getStaffRole, getDev
             </div>
           ) : (
             <div className="space-y-3">
-              {activeSessions.map((session: any) => (
+              {activeSessions.map((session: any) => {
+                const activityTime = session.last_activity_at || session.logged_in_at || session.created_at;
+                const loginTime = session.logged_in_at || session.created_at || session.last_activity_at;
+                return (
                 <div key={session.id} className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/30 transition-colors">
                   <div className="relative">
                     <Avatar className="h-10 w-10">
                       <AvatarFallback className="text-sm font-semibold">{getStaffName(session.user_id)?.charAt(0)}</AvatarFallback>
                     </Avatar>
-                    <span className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-background ${getStatusColor(session.last_activity_at)}`} />
+                    <span className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-background ${getStatusColor(activityTime)}`} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -194,12 +220,12 @@ const ActiveSessionsPanel = ({ staffProfiles, getStaffName, getStaffRole, getDev
                     <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-0.5">
                       <span className="flex items-center gap-1">{getDeviceIcon(session.user_agent)} {getBrowserFromUA(session.user_agent)}</span>
                       <span>IP: {session.ip_address || 'N/A'}</span>
-                      <span>লগইন: {format(new Date(session.logged_in_at), 'dd MMM, h:mm a', { locale: bn })}</span>
+                      <span>লগইন: {safeFormat(loginTime, 'dd MMM, h:mm a', { locale: bn })}</span>
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <Badge className={`text-[10px] ${getInactiveMinutes(session.last_activity_at) < 5 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : getInactiveMinutes(session.last_activity_at) < 15 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
-                      {getStatusText(session.last_activity_at)}
+                    <Badge className={`text-[10px] ${getInactiveMinutes(activityTime) < 5 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : getInactiveMinutes(activityTime) < 15 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+                      {getStatusText(activityTime)}
                     </Badge>
                     <div className="mt-1.5">
                       <Button variant="ghost" size="sm" className="h-6 text-[10px] text-destructive hover:text-destructive" onClick={() => handleForceLogout(session.id)}>
@@ -208,7 +234,8 @@ const ActiveSessionsPanel = ({ staffProfiles, getStaffName, getStaffRole, getDev
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
@@ -437,7 +464,7 @@ const AdminStaffActivity = () => {
     });
 
     // Bulk delete operations
-    const bulkDeletes = auditLogs.filter(l => l.action?.includes('delete') && isToday(new Date(l.created_at)));
+    const bulkDeletes = auditLogs.filter(l => l.action?.includes('delete') && isToday(safeDate(l.created_at)));
     const deletesByUser: Record<string, number> = {};
     bulkDeletes.forEach(l => { if (l.user_id) deletesByUser[l.user_id] = (deletesByUser[l.user_id] || 0) + 1; });
     Object.entries(deletesByUser).filter(([, c]) => c >= 5).forEach(([userId, count]) => {
@@ -446,10 +473,11 @@ const AdminStaffActivity = () => {
 
     // Late night activity (12am-5am)
     auditLogs.filter(l => {
-      const h = new Date(l.created_at).getHours();
-      return h >= 0 && h < 5 && isToday(new Date(l.created_at));
+      const d = safeDate(l.created_at);
+      const h = d.getHours();
+      return h >= 0 && h < 5 && isToday(d);
     }).forEach(l => {
-      alerts.push({ type: 'late_night', message: `${getStaffName(l.user_id)} - রাত ${format(new Date(l.created_at), 'h:mm a')} এ অ্যাক্টিভ`, severity: 'low', timestamp: l.created_at, userId: l.user_id });
+      alerts.push({ type: 'late_night', message: `${getStaffName(l.user_id)} - রাত ${safeFormat(l.created_at, 'h:mm a')} এ অ্যাক্টিভ`, severity: 'low', timestamp: l.created_at, userId: l.user_id });
     });
 
     return alerts.slice(0, 10);
@@ -460,7 +488,7 @@ const AdminStaffActivity = () => {
     const feed: { id: string; type: 'audit' | 'login' | 'order'; icon: string; text: string; time: string; userId: string | null }[] = [];
     auditLogs.slice(0, 10).forEach(l => feed.push({
       id: `a-${l.id}`, type: 'audit', icon: '📝',
-      text: `${getStaffName(l.user_id)} → ${l.action} (${TABLE_LABELS[l.table_name || ''] || l.table_name})`,
+      text: `${getStaffName(l.user_id)} → ${ACTION_LABELS[l.action] || l.action} (${TABLE_LABELS[l.table_name || ''] || l.table_name})`,
       time: l.created_at, userId: l.user_id,
     }));
     loginLogs.slice(0, 5).forEach(l => feed.push({
@@ -473,7 +501,7 @@ const AdminStaffActivity = () => {
       text: `${getStaffName(l.changed_by)} → অর্ডার ${l.status}`,
       time: l.created_at, userId: l.changed_by,
     }));
-    return feed.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 15);
+    return feed.sort((a, b) => safeDate(b.time).getTime() - safeDate(a.time).getTime()).slice(0, 15);
   }, [auditLogs, loginLogs, orderHistory, staffProfiles]);
 
   // Staff activity data for charts
@@ -493,9 +521,9 @@ const AdminStaffActivity = () => {
       const d = format(subDays(new Date(), i), 'MM/dd');
       trend[d] = { date: d, actions: 0, logins: 0, orders: 0 };
     }
-    auditLogs.forEach(l => { const d = format(new Date(l.created_at), 'MM/dd'); if (trend[d]) trend[d].actions++; });
-    loginLogs.forEach(l => { const d = format(new Date(l.created_at), 'MM/dd'); if (trend[d]) trend[d].logins++; });
-    orderHistory.forEach(l => { const d = format(new Date(l.created_at), 'MM/dd'); if (trend[d]) trend[d].orders++; });
+    auditLogs.forEach(l => { const d = safeFormat(l.created_at, 'MM/dd'); if (trend[d]) trend[d].actions++; });
+    loginLogs.forEach(l => { const d = safeFormat(l.created_at, 'MM/dd'); if (trend[d]) trend[d].logins++; });
+    orderHistory.forEach(l => { const d = safeFormat(l.created_at, 'MM/dd'); if (trend[d]) trend[d].orders++; });
     return Object.values(trend).reverse();
   }, [auditLogs, loginLogs, orderHistory, dateRange]);
 
@@ -702,7 +730,7 @@ const AdminStaffActivity = () => {
                     <div key={item.id} className="flex items-center gap-2 p-1.5 hover:bg-muted/50 rounded text-sm">
                       <span className="text-base">{item.icon}</span>
                       <span className="flex-1 truncate">{item.text}</span>
-                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">{formatDistanceToNow(new Date(item.time), { addSuffix: true, locale: bn })}</span>
+                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">{safeFormatDistance(item.time, { addSuffix: true, locale: bn })}</span>
                     </div>
                   ))}
                   {realtimeFeed.length === 0 && <p className="text-center text-muted-foreground py-6 text-sm">কোন রিসেন্ট অ্যাক্টিভিটি নেই</p>}
@@ -712,10 +740,11 @@ const AdminStaffActivity = () => {
           </Card>
         </div>
 
-        {/* Tabs — 5 tabs */}
+        {/* Tabs — 6 tabs */}
         <Tabs defaultValue="sessions">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 h-auto gap-1">
             <TabsTrigger value="sessions"><Wifi className="h-4 w-4 mr-1 hidden sm:inline" /> অ্যাক্টিভ সেশন</TabsTrigger>
+            <TabsTrigger value="audit"><Activity className="h-4 w-4 mr-1 hidden sm:inline" /> অ্যাক্টিভিটি লগ</TabsTrigger>
             <TabsTrigger value="login"><LogIn className="h-4 w-4 mr-1 hidden sm:inline" /> লগইন ইতিহাস</TabsTrigger>
             <TabsTrigger value="orders"><ShoppingCart className="h-4 w-4 mr-1 hidden sm:inline" /> অর্ডার লগ</TabsTrigger>
             <TabsTrigger value="performance"><BarChart3 className="h-4 w-4 mr-1 hidden sm:inline" /> পারফরম্যান্স</TabsTrigger>
@@ -725,6 +754,101 @@ const AdminStaffActivity = () => {
           {/* ═══ Active Sessions Tab ═══ */}
           <TabsContent value="sessions" className="space-y-4">
             <ActiveSessionsPanel staffProfiles={staffProfiles} getStaffName={getStaffName} getStaffRole={getStaffRole} getDeviceIcon={getDeviceIcon} getBrowserFromUA={getBrowserFromUA} />
+          </TabsContent>
+
+          {/* ═══ Audit Activity Logs Tab ═══ */}
+          <TabsContent value="audit" className="space-y-4">
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex flex-wrap gap-3 items-center">
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder="অ্যাকশন, মডিউল বা স্টাফ খুঁজুন..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-9"
+                    />
+                  </div>
+                  <Select value={staffFilter} onValueChange={setStaffFilter}>
+                    <SelectTrigger className="w-[170px]"><User className="h-4 w-4 mr-1" /><SelectValue placeholder="সকল স্টাফ" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">সকল স্টাফ</SelectItem>
+                      {staffProfiles.map(s => <SelectItem key={s.id} value={s.id}>{s.full_name || s.email}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={actionFilter} onValueChange={setActionFilter}>
+                    <SelectTrigger className="w-[150px]"><Filter className="h-4 w-4 mr-1" /><SelectValue placeholder="সকল অ্যাকশন" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">সকল অ্যাকশন</SelectItem>
+                      {uniqueActions.map(a => <SelectItem key={a} value={a}>{ACTION_LABELS[a] || a}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={tableFilter} onValueChange={setTableFilter}>
+                    <SelectTrigger className="w-[150px]"><SelectValue placeholder="সকল মডিউল" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">সকল মডিউল</SelectItem>
+                      {uniqueTables.map(t => <SelectItem key={t!} value={t!}>{TABLE_LABELS[t!] || t}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Button variant="outline" size="sm" onClick={() => exportLogs(filteredAuditLogs, 'staff-audit-logs')}>
+                    <Download className="h-4 w-4 mr-1" /> এক্সপোর্ট
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <ScrollArea className="h-[500px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>সময়</TableHead>
+                      <TableHead>স্টাফ</TableHead>
+                      <TableHead>অ্যাকশন</TableHead>
+                      <TableHead>মডিউল</TableHead>
+                      <TableHead>রেকর্ড ID</TableHead>
+                      <TableHead>বিস্তারিত পরিবর্তন</TableHead>
+                      <TableHead>IP</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredAuditLogs.length === 0 ? (
+                      <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">কোন অ্যাক্টিভিটি লগ পাওয়া যায়নি</TableCell></TableRow>
+                    ) : filteredAuditLogs.map(log => (
+                      <TableRow key={log.id}>
+                        <TableCell className="text-xs whitespace-nowrap">
+                          <div>{safeFormat(log.created_at, 'dd/MM/yy HH:mm')}</div>
+                          <div className="text-[10px] text-muted-foreground">{safeFormatDistance(log.created_at, { addSuffix: true, locale: bn })}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-6 w-6"><AvatarFallback className="text-[10px]">{getStaffName(log.user_id)?.[0] || '?'}</AvatarFallback></Avatar>
+                            <span className="text-sm font-medium">{getStaffName(log.user_id)}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={`text-[10px] ${getActionColor(log.action)}`}>
+                            {ACTION_LABELS[log.action] || log.action}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs font-medium">
+                          {TABLE_LABELS[log.table_name || ''] || log.table_name || '-'}
+                        </TableCell>
+                        <TableCell className="text-xs font-mono text-muted-foreground">
+                          {log.record_id || '-'}
+                        </TableCell>
+                        <TableCell className="text-xs max-w-[260px] truncate text-muted-foreground">
+                          {log.new_values ? JSON.stringify(log.new_values) : log.old_values ? JSON.stringify(log.old_values) : '-'}
+                        </TableCell>
+                        <TableCell className="text-xs font-mono text-muted-foreground">
+                          {log.ip_address || '-'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </Card>
           </TabsContent>
 
           {/* ═══ Login Tab ═══ */}
@@ -772,8 +896,8 @@ const AdminStaffActivity = () => {
                     ) : filteredLoginLogs.map(log => (
                       <TableRow key={log.id} className={!log.success ? 'bg-red-50/50 dark:bg-red-900/5' : ''}>
                         <TableCell className="text-xs">
-                          <div>{format(new Date(log.created_at), 'dd/MM/yy HH:mm')}</div>
-                          <div className="text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(log.created_at), { addSuffix: true, locale: bn })}</div>
+                          <div>{safeFormat(log.created_at, 'dd/MM/yy HH:mm')}</div>
+                          <div className="text-[10px] text-muted-foreground">{safeFormatDistance(log.created_at, { addSuffix: true, locale: bn })}</div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
@@ -823,8 +947,8 @@ const AdminStaffActivity = () => {
                     ) : orderHistory.map(h => (
                       <TableRow key={h.id}>
                         <TableCell className="text-xs">
-                          <div>{format(new Date(h.created_at), 'dd/MM/yy HH:mm')}</div>
-                          <div className="text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(h.created_at), { addSuffix: true, locale: bn })}</div>
+                          <div>{safeFormat(h.created_at, 'dd/MM/yy HH:mm')}</div>
+                          <div className="text-[10px] text-muted-foreground">{safeFormatDistance(h.created_at, { addSuffix: true, locale: bn })}</div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
@@ -954,8 +1078,8 @@ const AdminStaffActivity = () => {
                         </div>
                       </div>
                       <div className="text-[10px] text-muted-foreground space-y-0.5">
-                        <div className="flex justify-between"><span>শেষ লগইন</span><span>{lastLogin ? formatDistanceToNow(new Date(lastLogin), { addSuffix: true, locale: bn }) : 'N/A'}</span></div>
-                        <div className="flex justify-between"><span>শেষ অ্যাকশন</span><span>{lastAction ? formatDistanceToNow(new Date(lastAction), { addSuffix: true, locale: bn }) : 'N/A'}</span></div>
+                        <div className="flex justify-between"><span>শেষ লগইন</span><span>{lastLogin ? safeFormatDistance(lastLogin, { addSuffix: true, locale: bn }) : 'N/A'}</span></div>
+                        <div className="flex justify-between"><span>শেষ অ্যাকশন</span><span>{lastAction ? safeFormatDistance(lastAction, { addSuffix: true, locale: bn }) : 'N/A'}</span></div>
                         <div className="flex justify-between"><span>ইউনিক IP</span><span>{uniqueIPs}টি</span></div>
                       </div>
                     </CardContent>
@@ -1104,9 +1228,9 @@ const AdminStaffActivity = () => {
                       <div className="space-y-1">
                         {recentActions.map(log => (
                           <div key={log.id} className="flex items-center gap-2 p-2 hover:bg-muted/50 rounded text-sm">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${getActionColor(log.action)}`}>{log.action}</span>
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${getActionColor(log.action)}`}>{ACTION_LABELS[log.action] || log.action}</span>
                             <span className="text-muted-foreground">{TABLE_LABELS[log.table_name || ''] || log.table_name}</span>
-                            <span className="ml-auto text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(log.created_at), { addSuffix: true, locale: bn })}</span>
+                            <span className="ml-auto text-[10px] text-muted-foreground">{safeFormatDistance(log.created_at, { addSuffix: true, locale: bn })}</span>
                           </div>
                         ))}
                         {recentActions.length === 0 && <p className="text-center text-muted-foreground py-4">কোন অ্যাকশন নেই</p>}
@@ -1124,7 +1248,7 @@ const AdminStaffActivity = () => {
                           {log.success ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500" /> : <XCircle className="h-3.5 w-3.5 text-red-500" />}
                           <span>{log.success ? 'সফল' : 'ব্যর্থ'}</span>
                           <span className="text-muted-foreground">• {getBrowserFromUA(log.user_agent)} • {log.ip_address || 'N/A'}</span>
-                          <span className="ml-auto text-[10px] text-muted-foreground">{format(new Date(log.created_at), 'dd/MM HH:mm')}</span>
+                          <span className="ml-auto text-[10px] text-muted-foreground">{safeFormat(log.created_at, 'dd/MM HH:mm')}</span>
                         </div>
                       ))}
                       {recentLogins.length === 0 && <p className="text-center text-muted-foreground py-4">কোন লগইন নেই</p>}

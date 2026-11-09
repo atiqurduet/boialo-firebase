@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Heart, User, Phone, Mail, ChevronRight, Home, ShoppingBag, HelpCircle, Info, FileText, X, MessageCircle } from "lucide-react";
+import { Heart, User, Phone, Mail, ChevronRight, Home, ShoppingBag, HelpCircle, Info, FileText, X, MessageCircle, Gift, Sparkles, Coins } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
 
@@ -117,6 +117,45 @@ export const MobileMenu = ({ isOpen, onClose, dynamicMenuItems, siteName = "ব�
             >
               <Heart className="w-4 h-4 text-primary" />
               <span className="hidden xs:inline">উইশলিস্ট</span>
+            </Link>
+          </div>
+
+          {/* Referral & Rewards banner */}
+          <div className="mx-3 my-2 p-3 rounded-xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border border-amber-500/20 space-y-2">
+            <Link
+              to="/referral"
+              onClick={onClose}
+              className="flex items-center justify-between text-xs sm:text-sm font-semibold text-amber-900 dark:text-amber-200 hover:text-primary transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Gift className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                <span>রেফারাল ও পয়েন্ট ওয়ালেট</span>
+              </div>
+              <span className="bg-amber-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-xs">+৫০ পয়েন্ট</span>
+            </Link>
+            <div className="h-px bg-amber-500/15" />
+            <Link
+              to="/rewards"
+              onClick={onClose}
+              className="flex items-center justify-between text-xs sm:text-sm font-semibold text-primary hover:text-primary/80 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-primary shrink-0" />
+                <span>রিওয়ার্ড ও কয়েন</span>
+              </div>
+              <ChevronRight className="w-4 h-4" />
+            </Link>
+            <div className="h-px bg-amber-500/15" />
+            <Link
+              to="/combo-builder"
+              onClick={onClose}
+              className="flex items-center justify-between text-xs sm:text-sm font-semibold text-indigo-700 dark:text-indigo-300 hover:text-primary transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <ShoppingBag className="w-4 h-4 text-indigo-600 shrink-0" />
+                <span>কাস্টম কম্বো মেকার</span>
+              </div>
+              <span className="bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-xs">১০% ছাড়</span>
             </Link>
           </div>
 

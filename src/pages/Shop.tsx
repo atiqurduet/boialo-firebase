@@ -300,67 +300,62 @@ const Shop = () => {
   }, [selectedCategoryInfo, categories]);
 
   const filteredProducts = useMemo(() => {
-    let products: Product[] = dbProducts.map(convertDbProduct);
+    let rawList = [...dbProducts];
 
     if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      products = products.filter(
-        (p) =>
-          p.title.toLowerCase().includes(query) ||
-          p.author.toLowerCase().includes(query)
-      );
+      const query = searchQuery.toLowerCase().trim();
+      rawList = rawList.filter((p) => {
+        const titleBn = (p.title_bn || '').toLowerCase();
+        const titleEn = (p.title_en || '').toLowerCase();
+        const author = (p.writer?.name_bn || p.author || '').toLowerCase();
+        const publisherName = (p.publisher_rel?.name_bn || p.publisher || '').toLowerCase();
+        return titleBn.includes(query) || titleEn.includes(query) || author.includes(query) || publisherName.includes(query);
+      });
     }
 
     if (category) {
       const categoryInfo = getCategoryInfo();
-      products = dbProducts
-        .filter(p => {
-          if (categoryInfo) {
-            // Include products from this category and its subcategories
-            const subCatIds = categories.filter(c => c.parent_id === categoryInfo.id).map(c => c.id);
-            const allIds = [categoryInfo.id, ...subCatIds];
-            return allIds.includes(p.category_id);
-          }
-          return p.category?.slug === category || p.category_id === category;
-        })
-        .map(convertDbProduct);
+      rawList = rawList.filter(p => {
+        if (categoryInfo) {
+          const subCatIds = categories.filter(c => c.parent_id === categoryInfo.id).map(c => c.id);
+          const allIds = [categoryInfo.id, ...subCatIds];
+          return allIds.includes(p.category_id);
+        }
+        return p.category?.slug === category || p.category_id === category;
+      });
     }
 
     if (writer) {
       const writerInfo = getWriterInfo();
-      products = dbProducts
-        .filter(p => {
-          if (writerInfo) {
-            return p.writer?.slug === writerInfo.slug || 
-                   p.writer?.id === writerInfo.id ||
-                   p.writer_id === writerInfo.id;
-          }
-          return false;
-        })
-        .map(convertDbProduct);
+      rawList = rawList.filter(p => {
+        if (writerInfo) {
+          return p.writer?.slug === writerInfo.slug || 
+                 p.writer?.id === writerInfo.id ||
+                 p.writer_id === writerInfo.id;
+        }
+        return false;
+      });
     }
 
     if (publisher) {
       const publisherInfo = getPublisherInfo();
       if (publisherInfo) {
-        products = dbProducts
-          .filter(p => 
-            p.publisher_rel?.slug === publisherInfo.slug || 
-            p.publisher_rel?.id === publisherInfo.id ||
-            p.publisher_id === publisherInfo.id
-          )
-          .map(convertDbProduct);
+        rawList = rawList.filter(p => 
+          p.publisher_rel?.slug === publisherInfo.slug || 
+          p.publisher_rel?.id === publisherInfo.id ||
+          p.publisher_id === publisherInfo.id
+        );
       }
     }
 
     if (brand) {
       const brandInfo = getBrandInfo();
       if (brandInfo) {
-        products = dbProducts
-          .filter(p => p.brand_id === brandInfo.id)
-          .map(convertDbProduct);
+        rawList = rawList.filter(p => p.brand_id === brandInfo.id);
       }
     }
+
+    let products: Product[] = rawList.map(convertDbProduct);
 
     if (preorder === "true") {
       products = products.filter(p => p.isPreorder === true);

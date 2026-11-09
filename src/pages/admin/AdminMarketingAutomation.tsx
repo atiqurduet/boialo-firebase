@@ -1,4 +1,5 @@
 import { useState } from "react";
+import DOMPurify from "dompurify";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminLayout } from "@/components/admin/AdminLayout";
@@ -1067,7 +1068,7 @@ const AdminMarketingAutomation = () => {
                             <Button variant="outline" size="sm" onClick={() => setPreviewOpen(!previewOpen)} className="gap-2"><Eye className="h-4 w-4" />{previewOpen ? 'প্রিভিউ বন্ধ' : 'প্রিভিউ'}</Button>
                             {previewOpen && (
                               <div className="p-4 bg-white dark:bg-gray-900 rounded-lg border max-h-48 overflow-y-auto">
-                                <div dangerouslySetInnerHTML={{ __html: form.email_content.replace(/\{\{(\w+)\}\}/g, '<span class="bg-yellow-200 dark:bg-yellow-800 px-1 rounded">[$1]</span>') }} />
+                                <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(form.email_content.replace(/\{\{(\w+)\}\}/g, '<span class="bg-yellow-200 dark:bg-yellow-800 px-1 rounded">[$1]</span>')) }} />
                               </div>
                             )}
                           </div>

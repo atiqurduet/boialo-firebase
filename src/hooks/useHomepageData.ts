@@ -90,6 +90,7 @@ interface HomepageData {
   loading: boolean;
   error: string | null;
   getProductsByCategory: (categoryId: string) => Product[];
+  getProductsByCategories: (categoryIds: string[]) => Product[];
   getProductsByWriter: (writerId: string) => Product[];
   getProductsByIds: (ids: string[]) => Product[];
   getUniversalProductsByCategory: (categoryId: string) => UniversalProduct[];
@@ -98,7 +99,7 @@ interface HomepageData {
 }
 
 export const useHomepageData = (): HomepageData => {
-  const [data, setData] = useState<Omit<HomepageData, 'getProductsByCategory' | 'getProductsByWriter' | 'getProductsByIds' | 'getUniversalProductsByCategory' | 'getUniversalProductsByType' | 'getUniversalCategoriesByType'>>({
+  const [data, setData] = useState<Omit<HomepageData, 'getProductsByCategory' | 'getProductsByCategories' | 'getProductsByWriter' | 'getProductsByIds' | 'getUniversalProductsByCategory' | 'getUniversalProductsByType' | 'getUniversalCategoriesByType'>>({
     banners: [],
     categories: [],
     products: [],
@@ -186,9 +187,22 @@ export const useHomepageData = (): HomepageData => {
     fetchData();
   }, []);
 
-  // Helper functions to filter products
+  // Helper functions to filter products (including subcategories when a parent category is selected)
   const getProductsByCategory = (categoryId: string): Product[] => {
-    return data.products.filter(p => p.category_id === categoryId);
+    const subIds = data.categories.filter(c => c.parent_id === categoryId).map(c => c.id);
+    const validIds = new Set([categoryId, ...subIds]);
+    return data.products.filter(p => p.category_id && validIds.has(p.category_id));
+  };
+
+  const getProductsByCategories = (categoryIds: string[]): Product[] => {
+    if (!categoryIds || categoryIds.length === 0) return data.products;
+    const validIds = new Set<string>(categoryIds);
+    data.categories.forEach(c => {
+      if (c.parent_id && validIds.has(c.parent_id)) {
+        validIds.add(c.id);
+      }
+    });
+    return data.products.filter(p => p.category_id && validIds.has(p.category_id));
   };
 
   const getProductsByWriter = (writerId: string): Product[] => {
@@ -200,7 +214,9 @@ export const useHomepageData = (): HomepageData => {
   };
 
   const getUniversalProductsByCategory = (categoryId: string): UniversalProduct[] => {
-    return data.universalProducts.filter(p => p.category_id === categoryId);
+    const subIds = data.universalCategories.filter(c => c.parent_id === categoryId).map(c => c.id);
+    const validIds = new Set([categoryId, ...subIds]);
+    return data.universalProducts.filter(p => p.category_id && validIds.has(p.category_id));
   };
 
   const getUniversalProductsByType = (productType: string): UniversalProduct[] => {
@@ -214,6 +230,7 @@ export const useHomepageData = (): HomepageData => {
   return {
     ...data,
     getProductsByCategory,
+    getProductsByCategories,
     getProductsByWriter,
     getProductsByIds,
     getUniversalProductsByCategory,

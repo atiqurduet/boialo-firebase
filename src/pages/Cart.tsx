@@ -1,14 +1,15 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import { Button } from "@/components/ui/button";
-import { Trash2, Plus, Minus, ShoppingBag, Loader2, Bookmark, ShoppingCart } from "lucide-react";
+import { Trash2, Plus, Minus, ShoppingBag, Loader2, Bookmark, ShoppingCart, Gift } from "lucide-react";
 import { useCartContext } from "@/contexts/CartContext";
 import { useSavedCart } from "@/hooks/useSavedCart";
 import { useAuth } from "@/contexts/AuthContext";
 
 const Cart = () => {
+  const navigate = useNavigate();
   const { cartItems, loading, updateQuantity, removeFromCart, subtotal, addToCart } = useCartContext();
   const { savedItems, saveForLater, removeSavedItem } = useSavedCart();
   const { user } = useAuth();
@@ -219,11 +220,18 @@ const Cart = () => {
                 </div>
               </div>
 
-              <Link to="/checkout">
-                <Button className="w-full btn-primary mt-6">
-                  চেকআউট করুন
-                </Button>
-              </Link>
+              {/* Gift Service tip */}
+              <div className="flex items-center gap-2 p-3 mt-4 rounded-xl bg-pink-500/10 border border-pink-500/20 text-pink-700 dark:text-pink-300 text-xs">
+                <Gift className="w-4 h-4 text-pink-600 shrink-0" />
+                <span>কাউকে উপহার দিচ্ছেন? চেকআউটে <strong>গিফট র‍্যাপিং ও উইশ কার্ড</strong> যোগ করতে পারবেন!</span>
+              </div>
+
+              <Button
+                onClick={() => navigate("/checkout")}
+                className="w-full btn-primary mt-4 py-6 text-base font-semibold shadow-md hover:shadow-lg transition-all"
+              >
+                চেকআউট করুন
+              </Button>
 
               <div className="mt-4">
                 <input

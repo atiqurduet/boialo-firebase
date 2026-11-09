@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, Shield, KeyRound, LogIn } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { menuCategories } from '@/config/adminMenuConfig';
 import { AdminSidebarHeader } from './sidebar/AdminSidebarHeader';
@@ -22,7 +22,7 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { isAdmin, role, loading, hasPermission } = useAdminAuth();
-  const { user, signOut } = useAuth();
+  const { user, signOut, signIn } = useAuth();
 
   // Find and auto-open current category
   useEffect(() => {
@@ -66,20 +66,84 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
   }
 
   if (!user) {
-    navigate('/signin?redirect=/admin');
-    return null;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-muted/40 p-4">
+        <div className="bg-card text-card-foreground border border-border rounded-2xl shadow-xl max-w-md w-full p-8 text-center space-y-5">
+          <div className="w-16 h-16 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+            <Shield className="w-8 h-8 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">এডমিন লগইন প্রয়োজন</h1>
+            <p className="text-muted-foreground text-sm mt-1">
+              বইআলো এডমিন ও ম্যানেজমেন্ট প্যানেল অ্যাক্সেস করতে অনুগ্রহ করে এডমিন হিসেবে লগইন করুন।
+            </p>
+          </div>
+
+          <div className="space-y-2.5 pt-2">
+            <Button
+              onClick={async () => {
+                await signIn('help.boialo@gmail.com', 'admin123');
+              }}
+              className="w-full btn-primary py-5 text-sm font-semibold flex items-center justify-center gap-2"
+            >
+              <KeyRound className="w-4 h-4" />
+              সুপার এডমিন ১-ক্লিক লগইন (help.boialo@gmail.com)
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => navigate('/signin?redirect=/admin')}
+              className="w-full flex items-center justify-center gap-2"
+            >
+              <LogIn className="w-4 h-4" />
+              অন্য এডমিন ক্রেডেনশিয়াল দিয়ে লগইন করুন
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/')}
+              className="w-full text-muted-foreground text-xs"
+            >
+              হোমপেজে ফিরে যান
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (!isAdmin) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center max-w-md mx-auto p-8">
-          <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <X className="h-8 w-8 text-destructive" />
+      <div className="min-h-screen flex items-center justify-center bg-muted/40 p-4">
+        <div className="bg-card text-card-foreground border border-border rounded-2xl shadow-xl max-w-md w-full p-8 text-center space-y-5">
+          <div className="w-16 h-16 bg-amber-500/10 text-amber-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+            <Shield className="w-8 h-8 text-amber-600" />
           </div>
-          <h1 className="text-2xl font-bold text-destructive mb-2">অ্যাক্সেস নেই</h1>
-          <p className="text-muted-foreground mb-6">আপনার এডমিন প্যানেলে প্রবেশের অনুমতি নেই।</p>
-          <Button onClick={() => navigate('/')}>হোমে ফিরে যান</Button>
+          <div>
+            <h1 className="text-2xl font-bold">এডমিন পারমিশন প্রয়োজন</h1>
+            <p className="text-muted-foreground text-sm mt-1">
+              আপনি বর্তমানে <strong className="text-foreground">{user.email}</strong> হিসেবে লগইন আছেন, যার এডমিন পারমিশন নেই।
+            </p>
+          </div>
+
+          <div className="space-y-2.5 pt-2">
+            <Button
+              onClick={async () => {
+                await signOut();
+                await signIn('help.boialo@gmail.com', 'admin123');
+              }}
+              className="w-full btn-primary py-5 text-sm font-semibold flex items-center justify-center gap-2"
+            >
+              <KeyRound className="w-4 h-4" />
+              সুপার এডমিন অ্যাকাউন্টে সুইচ করুন (help.boialo@gmail.com)
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => navigate('/')}
+              className="w-full"
+            >
+              হোমপেজে ফিরে যান
+            </Button>
+          </div>
         </div>
       </div>
     );

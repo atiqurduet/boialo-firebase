@@ -59,6 +59,7 @@ export const useSessionTracker = (userId: string | null, signOut: () => Promise<
         .eq('user_id', userId)
         .eq('is_active', true);
 
+      const nowIso = new Date().toISOString();
       const { data } = await supabase
         .from('active_sessions')
         .insert({
@@ -67,6 +68,8 @@ export const useSessionTracker = (userId: string | null, signOut: () => Promise<
           ip_address: ip,
           user_agent: navigator.userAgent,
           is_active: true,
+          logged_in_at: nowIso,
+          last_activity_at: nowIso,
         })
         .select('id')
         .single();

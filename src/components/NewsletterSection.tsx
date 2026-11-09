@@ -6,7 +6,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { trackSubscribe } from "@/lib/analytics";
 
-export const NewsletterSection = () => {
+interface NewsletterSectionProps {
+  title?: string;
+  subtitle?: string;
+  settings?: {
+    placeholder?: string;
+    button_text?: string;
+  };
+}
+
+export const NewsletterSection = ({ title, subtitle, settings }: NewsletterSectionProps) => {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -51,18 +60,18 @@ export const NewsletterSection = () => {
       <div className="container">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-4 text-primary-foreground">
-            <div className="w-16 h-16 bg-primary-foreground/20 rounded-full flex items-center justify-center">
+            <div className="w-16 h-16 bg-primary-foreground/20 rounded-full flex items-center justify-center shrink-0">
               <Mail className="w-8 h-8" />
             </div>
             <div>
-              <h3 className="text-xl md:text-2xl font-bold">নিউজলেটার সাবস্ক্রাইব করুন</h3>
-              <p className="text-sm md:text-base opacity-90">নতুন বই ও অফারের আপডেট পেতে সাবস্ক্রাইব করুন</p>
+              <h3 className="text-xl md:text-2xl font-bold">{title || "নিউজলেটার সাবস্ক্রাইব করুন"}</h3>
+              <p className="text-sm md:text-base opacity-90">{subtitle || "নতুন বই ও অফারের আপডেট পেতে সাবস্ক্রাইব করুন"}</p>
             </div>
           </div>
           <form onSubmit={handleSubmit} className="flex w-full md:w-auto gap-2">
             <Input
               type="email"
-              placeholder="আপনার ইমেইল লিখুন"
+              placeholder={settings?.placeholder || "আপনার ইমেইল লিখুন"}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={loading}
@@ -78,7 +87,7 @@ export const NewsletterSection = () => {
               ) : (
                 <Send className="w-4 h-4" />
               )}
-              <span className="hidden sm:inline">{loading ? 'সাবস্ক্রাইব হচ্ছে...' : 'সাবস্ক্রাইব'}</span>
+              <span className="hidden sm:inline">{loading ? 'সাবস্ক্রাইব হচ্ছে...' : (settings?.button_text || 'সাবস্ক্রাইব')}</span>
             </Button>
           </form>
         </div>

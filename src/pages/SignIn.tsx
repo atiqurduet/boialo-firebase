@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
@@ -17,7 +17,7 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
-import { Eye, EyeOff, Loader2, Phone, CheckCircle } from "lucide-react";
+import { Eye, EyeOff, Loader2, Phone, CheckCircle, ArrowRight, Key, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 // Self-hosting-friendly: use native Supabase OAuth directly (bypasses Lovable broker).
@@ -27,6 +27,8 @@ import { toast } from "sonner";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 
 const SignIn = () => {
+  const [searchParams] = useSearchParams();
+  const redirectParam = searchParams.get("redirect");
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -189,7 +191,25 @@ const SignIn = () => {
       }
     } else {
       toast.success("স্বাগতম!");
-      navigate("/");
+      const destination = redirectParam || (email.toLowerCase() === 'help.boialo@gmail.com' || email.toLowerCase() === 'manager@boialo.com' ? "/admin" : "/");
+      navigate(destination);
+    }
+  };
+
+  const handleQuickLogin = async (demoEmail: string, demoPass: string) => {
+    setEmail(demoEmail);
+    setPassword(demoPass);
+    setIsLogin(true);
+    setLoading(true);
+    toast.info(`${demoEmail} দিয়ে লগইন করা হচ্ছে...`);
+    const { error } = await signIn(demoEmail, demoPass);
+    setLoading(false);
+    if (!error) {
+      toast.success("সফলভাবে লগইন হয়েছে!");
+      const destination = redirectParam || (demoEmail === 'help.boialo@gmail.com' || demoEmail === 'manager@boialo.com' ? "/admin" : "/");
+      navigate(destination);
+    } else {
+      toast.error(error.message || "লগইন ব্যর্থ হয়েছে");
     }
   };
 
@@ -544,6 +564,84 @@ const SignIn = () => {
                   </button>
                 </p>
               )}
+            </div>
+
+            {/* Demo Credentials Box */}
+            <div className="mt-6 pt-5 border-t border-border/80">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5 text-primary" />
+                  ডেমো ক্রেডেনশিয়াল (টেস্টিং লগইন)
+                </span>
+                <span className="text-[11px] bg-primary/10 text-primary font-medium px-2 py-0.5 rounded-full">১-ক্লিক লগইন</span>
+              </div>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => handleQuickLogin("help.boialo@gmail.com", "Admin@123456")}
+                  className="w-full text-left p-2.5 rounded-lg border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-all flex items-center justify-between group cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-bold shrink-0">
+                      👑
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-foreground group-hover:text-primary transition-colors flex items-center gap-1.5">
+                        সুপার অ্যাডমিন (Super Admin)
+                        <span className="text-[10px] text-primary bg-primary/15 px-1.5 py-0.2 rounded font-mono">ফুল অ্যাক্সেস</span>
+                      </div>
+                      <div className="text-[11px] text-muted-foreground font-mono">
+                        help.boialo@gmail.com • Admin@123456
+                      </div>
+                    </div>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-primary opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleQuickLogin("manager@boialo.com", "Manager@123456")}
+                  className="w-full text-left p-2.5 rounded-lg border border-border bg-muted/40 hover:bg-muted transition-all flex items-center justify-between group cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center text-sm font-bold shrink-0">
+                      📦
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-foreground group-hover:text-primary transition-colors flex items-center gap-1.5">
+                        স্টোর ম্যানেজার (Store Manager)
+                        <span className="text-[10px] text-amber-700 dark:text-amber-300 bg-amber-500/15 px-1.5 py-0.2 rounded font-mono">অর্ডার ও প্রোডাক্ট</span>
+                      </div>
+                      <div className="text-[11px] text-muted-foreground font-mono">
+                        manager@boialo.com • Manager@123456
+                      </div>
+                    </div>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleQuickLogin("customer@boialo.com", "User@123456")}
+                  className="w-full text-left p-2.5 rounded-lg border border-border bg-muted/40 hover:bg-muted transition-all flex items-center justify-between group cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-blue-500/10 text-blue-600 flex items-center justify-center text-sm font-bold shrink-0">
+                      👤
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-foreground group-hover:text-primary transition-colors flex items-center gap-1.5">
+                        সাধারণ পাঠক (Demo Customer)
+                        <span className="text-[10px] text-blue-700 dark:text-blue-300 bg-blue-500/15 px-1.5 py-0.2 rounded font-mono">অর্ডার ও রিডিং গোল</span>
+                      </div>
+                      <div className="text-[11px] text-muted-foreground font-mono">
+                        customer@boialo.com • User@123456
+                      </div>
+                    </div>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+                </button>
+              </div>
             </div>
           </div>
         </div>

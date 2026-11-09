@@ -18,7 +18,8 @@ import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
 import { useProductBundles } from "@/hooks/useProductBundles";
 import { useCartContext } from "@/contexts/CartContext";
 import { Button } from "@/components/ui/button";
-import { Heart, ChevronRight, BookOpen, ShoppingCart, Package, Clock, ArrowRight, Zap, Truck, CheckCircle, ShieldCheck, Headphones } from "lucide-react";
+import { Heart, ChevronRight, BookOpen, ShoppingCart, Package, Clock, ArrowRight, Zap, Truck, CheckCircle, ShieldCheck, Headphones, Sparkles, Gift } from "lucide-react";
+import { TrustBadges } from "@/components/TrustBadges";
 import { supabase } from "@/integrations/supabase/client";
 import { useWishlistContext } from "@/contexts/WishlistContext";
 import { format } from "date-fns";
@@ -30,6 +31,7 @@ import { ProductQA } from "@/components/ProductQA";
 import { StockAlertButton } from "@/components/StockAlertButton";
 import { QuickCheckoutModal } from "@/components/QuickCheckoutModal";
 import { BookLookInsideModal } from "@/components/BookLookInsideModal";
+import { PriceDropAlert } from "@/components/PriceDropAlert";
 import {
   Dialog,
   DialogContent,
@@ -38,7 +40,8 @@ import {
 } from "@/components/ui/dialog";
 
 const ProductDetail = () => {
-  const { slug } = useParams();
+  const { slug: rawSlug } = useParams();
+  const slug = rawSlug ? decodeURIComponent(rawSlug).trim() : "";
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewTab, setPreviewTab] = useState<"sample" | "toc" | "specs" | "pdf" | "audio">("sample");
   const [quickCheckoutOpen, setQuickCheckoutOpen] = useState(false);
@@ -48,11 +51,13 @@ const ProductDetail = () => {
   const { addToCart } = useCartContext();
   const { addItem: addRecentlyViewed } = useRecentlyViewed();
 
-  // Fetch product from Supabase by slug
+  // Fetch product from Supabase by slug or id, with fallback
   const { data: dbProduct, isLoading } = useQuery({
     queryKey: ['product', slug],
     queryFn: async () => {
-      const { data, error } = await supabase
+      if (!slug) return null;
+      // 1. Try products table by slug
+      const { data: bySlug, error: slugErr } = await supabase
         .from('products')
         .select(`
           *,
@@ -63,8 +68,39 @@ const ProductDetail = () => {
         .eq('slug', slug)
         .maybeSingle();
       
-      if (error) return null;
-      return data;
+      if (bySlug) return bySlug;
+
+      // 2. Try products table by ID
+      const { data: byId } = await supabase
+        .from('products')
+        .select(`
+          *,
+          category:categories(id, name_bn, name_en, slug),
+          writer:writers(id, name_bn, name_en, slug),
+          publisher_rel:publishers(id, name_bn, name_en, slug)
+        `)
+        .eq('id', slug)
+        .maybeSingle();
+
+      if (byId) return byId;
+
+      // 3. Try universal_products table
+      const { data: byUni } = await supabase
+        .from('universal_products')
+        .select('*')
+        .or(`slug.eq.${slug},id.eq.${slug}`)
+        .maybeSingle();
+
+      if (byUni) {
+        return {
+          ...byUni,
+          title_bn: byUni.name_bn || byUni.name_en,
+          title_en: byUni.name_en || byUni.name_bn,
+          author: byUni.brand || 'লাইফস্টাইল',
+        };
+      }
+
+      return null;
     },
     enabled: !!slug,
   });
@@ -470,6 +506,14 @@ const ProductDetail = () => {
                 )}
               </div>
 
+              {/* Loyalty Reward Points Badge */}
+              <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-xs sm:text-sm font-medium">
+                <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span>
+                  🎁 এই বইটি কিনলে পাবেন <strong className="font-bold text-emerald-700 dark:text-emerald-200">+{Math.max(1, Math.round(Number(selectedVariant ? selectedVariant.price : product.price) * 0.02))} রিওয়ার্ড পয়েন্ট</strong> (ভবিষ্যতের অর্ডারে নগদ টাকা বা ফ্রি হোম ডেলিভারিতে ব্যবহারযোগ্য!)
+                </span>
+              </div>
+
               {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row gap-3">
                 {product.isPreorder ? (
@@ -554,6 +598,7 @@ const ProductDetail = () => {
                     <span className="text-muted-foreground">পণ্য হাতে পেয়ে মূল্য পরিশোধ করার সুবিধা</span>
                   </div>
                 </div>
+                <TrustBadges variant="compact" className="mt-2" />
               </div>
 
               {/* Wishlist & Share */}

@@ -98,7 +98,41 @@ export const DynamicHeroSlider = ({ banners }: DynamicHeroSliderProps) => {
               }`}
             >
               {banner.link_url ? (
-                <Link to={banner.link_url} className="block h-full">
+                <Link to={banner.link_url} className="block h-full relative group">
+                  <picture>
+                    {banner.image_mobile && (
+                      <source media="(max-width: 640px)" srcSet={banner.image_mobile} />
+                    )}
+                    <img
+                      src={banner.image_desktop}
+                      alt={banner.title}
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-102"
+                      loading={index === 0 ? "eager" : "lazy"}
+                    />
+                  </picture>
+                  {banner.title && (
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent flex items-end">
+                      <div className="container pb-8 md:pb-14 text-white">
+                        <div className="max-w-2xl space-y-2 md:space-y-3">
+                          <span className="inline-flex items-center gap-1.5 bg-primary/90 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider backdrop-blur-xs shadow-sm">
+                            বিশেষ অফার
+                          </span>
+                          <h2 className="text-xl sm:text-2xl md:text-4xl font-extrabold text-white drop-shadow-md leading-tight line-clamp-2">
+                            {banner.title}
+                          </h2>
+                          <div className="pt-1">
+                            <span className="inline-flex items-center gap-2 bg-white text-zinc-900 px-5 py-2.5 rounded-full font-bold text-xs sm:text-sm shadow-lg group-hover:bg-primary group-hover:text-white transition-all">
+                              বইগুলো দেখুন
+                              <ChevronRight className="w-4 h-4" />
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </Link>
+              ) : (
+                <div className="block h-full relative">
                   <picture>
                     {banner.image_mobile && (
                       <source media="(max-width: 640px)" srcSet={banner.image_mobile} />
@@ -110,19 +144,18 @@ export const DynamicHeroSlider = ({ banners }: DynamicHeroSliderProps) => {
                       loading={index === 0 ? "eager" : "lazy"}
                     />
                   </picture>
-                </Link>
-              ) : (
-                <picture>
-                  {banner.image_mobile && (
-                    <source media="(max-width: 640px)" srcSet={banner.image_mobile} />
+                  {banner.title && (
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent flex items-end">
+                      <div className="container pb-8 md:pb-14 text-white">
+                        <div className="max-w-2xl space-y-2">
+                          <h2 className="text-xl sm:text-2xl md:text-4xl font-extrabold text-white drop-shadow-md leading-tight">
+                            {banner.title}
+                          </h2>
+                        </div>
+                      </div>
+                    </div>
                   )}
-                  <img
-                    src={banner.image_desktop}
-                    alt={banner.title}
-                    className="w-full h-full object-cover"
-                    loading={index === 0 ? "eager" : "lazy"}
-                  />
-                </picture>
+                </div>
               )}
             </div>
           ))

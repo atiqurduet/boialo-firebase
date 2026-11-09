@@ -33,7 +33,11 @@ import {
   Lock,
   Smartphone,
   Eye,
-  EyeOff
+  EyeOff,
+  Sparkles,
+  Gift,
+  Flame,
+  Zap
 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -217,6 +221,11 @@ const AdminSettings = () => {
       title: 'অ্যানালিটিক্স ও পিক্সেল', 
       description: 'Google Analytics, Facebook Pixel' 
     },
+    features: { 
+      icon: Sparkles, 
+      title: 'অ্যাডভান্সড ফিচার ও গ্রোথ', 
+      description: 'গিফট র‍্যাপিং, ফ্ল্যাশ সেল, কম্বো মেকার, স্ক্র্যাচ কুপন, ট্রাস্ট ব্যাজ ও রিডিং চ্যালেঞ্জ' 
+    },
   };
 
   const otpSettingConfig = [
@@ -338,6 +347,22 @@ const AdminSettings = () => {
       shipping_dhaka: 'ঢাকার ভেতর ডেলিভারি চার্জ',
       shipping_outside: 'ঢাকার বাইরে ডেলিভারি চার্জ',
       free_shipping_min: 'ফ্রি শিপিং মিনিমাম অর্ডার',
+      gift_wrap_enabled: '🎁 গিফট র‍্যাপিং ও উইশ কার্ড সক্রিয় (true/false)',
+      gift_wrap_price: '🎁 গিফট র‍্যাপিং ফি (টাকায়)',
+      gift_wrap_title: '🎁 গিফট র‍্যাপিং শিরোনাম',
+      flash_sale_enabled: '⚡ ফ্ল্যাশ সেল ও কাউন্টডাউন সক্রিয় (true/false)',
+      flash_sale_title: '⚡ ফ্ল্যাশ সেল শিরোনাম',
+      flash_sale_discount_percent: '⚡ ফ্ল্যাশ সেল ছাড় (%)',
+      flash_sale_end_time: '⚡ ফ্ল্যাশ সেল শেষ সময় (ISO Date)',
+      combo_builder_enabled: '✨ কাস্টম কম্বো বিল্ডার সক্রিয় (true/false)',
+      combo_discount_percent: '✨ কম্বো অতিরিক্ত ডিসকাউন্ট (%)',
+      scratch_win_enabled: '🎉 স্ক্র্যাচ অ্যান্ড উইন কুপন সক্রিয় (true/false)',
+      scratch_win_coupon_code: '🎉 স্ক্র্যাচ উইন কুপন কোড',
+      trust_courier_open_enabled: '🛡️ পার্সেল ওপেন গ্যারান্টি ব্যাজ সক্রিয় (true/false)',
+      trust_badge_text: '🛡️ পার্সেল ওপেন গ্যারান্টি লেখা',
+      reading_goal_enabled: '🏆 বার্ষিক রিডিং গোল চ্যালেঞ্জ সক্রিয় (true/false)',
+      reading_goal_year: '🏆 রিডিং গোল সাল',
+      low_stock_threshold: '⚠️ কম স্টক সতর্কতা সীমা (Stock Threshold)',
     };
     return labels[setting.setting_key] || setting.description || setting.setting_key;
   };

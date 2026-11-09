@@ -1,9 +1,9 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { CartProvider } from "@/contexts/CartContext";
 import { WishlistProvider } from "@/contexts/WishlistContext";
@@ -66,6 +66,7 @@ const Eproducts = lazy(() => import("./pages/Eproducts"));
 const Rewards = lazy(() => import("./pages/Rewards"));
 const Referral = lazy(() => import("./pages/Referral"));
 const SyllabusBundles = lazy(() => import("./pages/SyllabusBundles"));
+const ComboBuilder = lazy(() => import("./pages/ComboBuilder"));
 
 // Admin Pages - lazy loaded
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
@@ -153,6 +154,29 @@ const PageLoader = () => (
   </div>
 );
 
+// Automatically strip accidental leading/trailing whitespace or %20 from route segments
+const PathnameNormalizer = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    try {
+      const decoded = decodeURIComponent(location.pathname);
+      const cleaned = decoded
+        .split("/")
+        .map((seg) => seg.trim())
+        .join("/");
+      if (cleaned !== decoded && cleaned.length > 0) {
+        navigate(`${cleaned}${location.search}${location.hash}`, { replace: true });
+      }
+    } catch {
+      // Ignore malformed URI components
+    }
+  }, [location.pathname, location.search, location.hash, navigate]);
+
+  return null;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
@@ -164,12 +188,15 @@ const App = () => (
             <Sonner />
             <ThemeInitializer />
             <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+              <PathnameNormalizer />
               <AnalyticsProvider>
               <Suspense fallback={<PageLoader />}>
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/shop" element={<Shop />} />
                 <Route path="/product/:slug" element={<ProductDetail />} />
+                <Route path="/products/:slug" element={<ProductDetail />} />
+                <Route path="/book/:slug" element={<ProductDetail />} />
                 <Route path="/cart" element={<Cart />} />
                 <Route path="/checkout" element={<Checkout />} />
                 <Route path="/order-confirmation" element={<OrderConfirmation />} />
@@ -209,6 +236,7 @@ const App = () => (
                 <Route path="/bundles" element={<Bundles />} />
                 <Route path="/syllabus" element={<SyllabusBundles />} />
                 <Route path="/booklist" element={<SyllabusBundles />} />
+                <Route path="/combo-builder" element={<ComboBuilder />} />
                 <Route path="/compare" element={<Compare />} />
                 <Route path="/rewards" element={<Rewards />} />
                 <Route path="/referral" element={<Referral />} />
